@@ -1,456 +1,374 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#101827">
-  <meta name="description" content="أثر يومي — مساحة بسيطة لتنظيم يومك وتسجيل إنجازاتك.">
   <title>أثر يومي</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <div id="app" class="app-shell">
-    <div id="loading-screen" class="loading-screen" aria-live="polite">
-      <div class="loading-mark">أ</div>
-      <p>أثر يومي</p>
-      <span>نجهّز مساحتك...</span>
+
+    <!-- شاشة التحميل -->
+    <div id="loading-screen">
+      <div class="loading-content">
+        <div class="app-logo">أثر</div>
+        <h2>أثر يومي</h2>
+        <p>اصنع من يومك شيئاً يستحق التذكّر.</p>
+      </div>
     </div>
 
-    <div id="app-content" class="app-content" hidden>
-      <header class="topbar">
-        <div class="brand-block">
-          <div class="brand-mark" aria-hidden="true">أ</div>
+    <!-- محتوى التطبيق -->
+    <main id="app-content">
+
+      <!-- الصفحة الرئيسية -->
+      <section class="page-section active" id="home-page" data-page="home">
+        <header class="page-header">
           <div>
-            <p class="eyebrow">مساحتك اليومية</p>
+            <p class="text-muted">مساحة صغيرة ليوم أفضل</p>
             <h1>أثر يومي</h1>
           </div>
+          <button id="header-profile-btn" class="icon-button" aria-label="الملف الشخصي">
+            👤
+          </button>
+        </header>
+
+        <div class="welcome-card">
+          <h2 id="home-greeting">أهلاً بك 🌱</h2>
+          <p>اصنع من يومك شيئاً يستحق التذكّر.</p>
         </div>
-        <button class="icon-button" id="header-profile-btn" type="button" aria-label="الملف الشخصي" title="الملف الشخصي">
-          <span aria-hidden="true">◉</span>
-        </button>
-      </header>
 
-      <main id="main-content">
-        <!-- الرئيسية -->
-        <section class="page-section active" id="home-page" data-page="home">
-          <div class="welcome-card">
-            <div>
-              <p class="eyebrow" id="today-label">مساحة جديدة ليوم جديد</p>
-              <h2 id="welcome-title">أهلاً بك 👋</h2>
-              <p id="welcome-subtitle">اصنع من يومك شيئاً يستحق التذكّر.</p>
-            </div>
-            <div class="welcome-symbol" aria-hidden="true">✦</div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span>المهام</span>
+            <strong id="home-tasks-count">0</strong>
           </div>
+          <div class="stat-card">
+            <span>الماء</span>
+            <strong id="home-water-count">0</strong>
+          </div>
+          <div class="stat-card">
+            <span>جلسات الدراسة</span>
+            <strong id="home-study-count">0</strong>
+          </div>
+        </div>
 
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">نظرة سريعة</p>
-              <h2>يومك باختصار</h2>
-            </div>
-          </div>
+        <div class="card">
+          <h3>ملاحظة اليوم</h3>
+          <textarea id="daily-note-input" placeholder="اكتب ما تريد تذكّره اليوم..."></textarea>
+          <button id="save-daily-note-btn" class="primary-button">حفظ الملاحظة</button>
+          <p id="daily-note-status" class="status-text"></p>
+        </div>
 
-          <div class="stats-grid">
-            <article class="stat-card">
-              <span class="stat-icon" aria-hidden="true">✓</span>
-              <span class="stat-label">مهام مكتملة</span>
-              <strong class="stat-value" id="home-tasks-done">0</strong>
-            </article>
-            <article class="stat-card">
-              <span class="stat-icon" aria-hidden="true">◷</span>
-              <span class="stat-label">وقت الدراسة</span>
-              <strong class="stat-value" id="home-study-time">0 د</strong>
-            </article>
-            <article class="stat-card">
-              <span class="stat-icon" aria-hidden="true">▤</span>
-              <span class="stat-label">الماء اليوم</span>
-              <strong class="stat-value" id="home-water-total">0 مل</strong>
-            </article>
-            <article class="stat-card">
-              <span class="stat-icon" aria-hidden="true">✧</span>
-              <span class="stat-label">إنجازات اليوم</span>
-              <strong class="stat-value" id="home-achievements">0</strong>
-            </article>
-          </div>
+        <div class="card">
+          <h3>ملاحظات الأيام السابقة</h3>
+          <div id="daily-notes-archive-list"></div>
+        </div>
 
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">ابدأ من هنا</p>
-              <h2>اختصاراتك</h2>
-            </div>
-          </div>
+        <div class="card">
+          <h3>الوصول السريع</h3>
           <div class="quick-actions">
-            <button class="quick-action" type="button" data-go="tasks"><span>✓</span><b>المهام</b></button>
-            <button class="quick-action" type="button" data-go="water"><span>♧</span><b>الماء</b></button>
-            <button class="quick-action" type="button" data-go="study"><span>◷</span><b>الدراسة</b></button>
-            <button class="quick-action" type="button" data-go="journal"><span>✎</span><b>يومياتي</b></button>
+            <button data-page-target="tasks">المهام</button>
+            <button data-page-target="water">الماء</button>
+            <button data-page-target="study">الدراسة</button>
+            <button data-page-target="journal">اليوميات</button>
           </div>
+        </div>
+      </section>
 
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">خطوة صغيرة تكفي</p>
-              <h2>ملاحظة اليوم</h2>
-            </div>
-          </div>
-          <article class="panel">
-            <textarea id="daily-note-input" rows="3" maxlength="500" placeholder="اكتب ما تريد تذكّره من هذا اليوم..."></textarea>
-            <div class="panel-actions">
-              <span class="muted-text" id="daily-note-status">تُحفظ ملاحظتك على هذا الجهاز.</span>
-              <button class="primary-button" id="save-daily-note-btn" type="button">حفظ الملاحظة</button>
-            </div>
-          </article>
-        </section>
+      <!-- المهام -->
+      <section class="page-section" id="tasks-page" data-page="tasks">
+        <header class="page-header">
+          <h1>مهامي</h1>
+        </header>
 
-        <!-- المهام -->
-        <section class="page-section" id="tasks-page" data-page="tasks">
-          <div class="page-intro">
-            <p class="eyebrow">رتّب أولوياتك</p>
-            <h2>المهام</h2>
-            <p>قسّم ما تريد إنجازه إلى خطوات واضحة.</p>
-          </div>
+        <div class="card">
+          <form id="task-form">
+            <label for="task-title-input">عنوان المهمة</label>
+            <input id="task-title-input" type="text" placeholder="ماذا تريد إنجاز؟" required>
 
-          <form class="panel form-stack" id="task-form">
-            <label for="task-title-input">اسم المهمة</label>
-            <input id="task-title-input" type="text" maxlength="100" placeholder="اكتب اسم المهمة" required>
-            <div class="form-row">
-              <div class="field">
-                <label for="task-date-input">التاريخ</label>
-                <input id="task-date-input" type="date">
-              </div>
-              <div class="field">
-                <label for="task-priority-input">الأولوية</label>
-                <select id="task-priority-input">
-                  <option value="normal">عادية</option>
-                  <option value="high">مهمة</option>
-                  <option value="low">منخفضة</option>
-                </select>
-              </div>
-            </div>
-            <label for="task-color-input">لون المهمة</label>
-            <input id="task-color-input" type="color" value="#38bdf8">
-            <button class="primary-button" type="submit">إضافة المهمة</button>
-          </form>
+            <label for="task-date-input">التاريخ</label>
+            <input id="task-date-input" type="date">
 
-          <div class="filter-row" id="task-filters">
-            <button class="filter-chip active" type="button" data-filter="all">الكل</button>
-            <button class="filter-chip" type="button" data-filter="today">اليوم</button>
-            <button class="filter-chip" type="button" data-filter="active">غير المكتملة</button>
-            <button class="filter-chip" type="button" data-filter="done">المكتملة</button>
-          </div>
-          <div class="items-list" id="tasks-list">
-            <div class="empty-state">لا توجد مهام بعد. أضف أول مهمة لك.</div>
-          </div>
-        </section>
-
-        <!-- الماء -->
-        <section class="page-section" id="water-page" data-page="water">
-          <div class="page-intro">
-            <p class="eyebrow">اهتم بنفسك بهدوء</p>
-            <h2>متابعة الماء</h2>
-            <p>سجّل ما تشربه خلال اليوم، ويمكنك تعديل الكمية حسب حاجتك.</p>
-          </div>
-          <article class="panel water-panel">
-            <div class="water-summary">
-              <div>
-                <span class="muted-text">إجمالي ما سجلته اليوم</span>
-                <strong id="water-total-display">0</strong>
-                <span class="muted-text">مل</span>
-              </div>
-              <div class="water-drop" aria-hidden="true">💧</div>
-            </div>
-            <div class="water-progress-track"><div id="water-progress-fill" class="water-progress-fill"></div></div>
-            <p class="muted-text" id="water-progress-label">سجّل أكوابك لمتابعة يومك.</p>
-            <div class="water-actions">
-              <button class="primary-button" id="add-water-btn" type="button">+ إضافة كمية</button>
-              <button class="secondary-button" id="custom-water-btn" type="button">كمية مخصصة</button>
-            </div>
-            <div class="form-row water-settings-row">
-              <div class="field">
-                <label for="water-serving-input">كمية الإضافة (مل)</label>
-                <input id="water-serving-input" type="number" min="1" max="2000" value="250" inputmode="numeric">
-              </div>
-              <div class="field">
-                <label for="water-optional-goal-input">هدف اختياري (مل)</label>
-                <input id="water-optional-goal-input" type="number" min="0" max="10000" placeholder="بدون هدف">
-              </div>
-            </div>
-          </article>
-          <div class="section-heading"><h3>سجل اليوم</h3></div>
-          <div class="items-list" id="water-history-list">
-            <div class="empty-state">لم تسجل أي كمية اليوم.</div>
-          </div>
-        </section>
-
-        <!-- الدراسة -->
-        <section class="page-section" id="study-page" data-page="study">
-          <div class="page-intro">
-            <p class="eyebrow">ركّز على خطوة واحدة</p>
-            <h2>مساحة الدراسة</h2>
-            <p>استخدم المؤقت لتسجيل جلساتك، وخذ استراحة عند الحاجة.</p>
-          </div>
-          <article class="panel timer-panel">
-            <label for="study-minutes-input">مدة الجلسة بالدقائق</label>
-            <input id="study-minutes-input" type="number" min="1" max="240" value="25" inputmode="numeric">
-            <div class="timer-display" id="study-timer-display" aria-live="off">25:00</div>
-            <p class="muted-text" id="study-timer-status">المؤقت متوقف.</p>
-            <div class="button-row">
-              <button class="primary-button" id="study-start-btn" type="button">بدء</button>
-              <button class="secondary-button" id="study-pause-btn" type="button" disabled>إيقاف مؤقت</button>
-              <button class="text-button" id="study-reset-btn" type="button">إعادة ضبط</button>
-            </div>
-          </article>
-          <div class="section-heading"><h3>ملخص الدراسة اليوم</h3></div>
-          <article class="panel compact-panel">
-            <strong class="large-value" id="study-today-total">0 دقيقة</strong>
-            <span class="muted-text">إجمالي الوقت المسجّل اليوم</span>
-          </article>
-          <div class="section-heading"><h3>جلساتك الأخيرة</h3></div>
-          <div class="items-list" id="study-sessions-list">
-            <div class="empty-state">ستظهر جلساتك هنا بعد إكمالها.</div>
-          </div>
-        </section>
-        <!-- المالية -->
-        <section class="page-section" id="finance-page" data-page="finance">
-          <div class="page-intro">
-            <p class="eyebrow">تابع أرقامك بوضوح</p>
-            <h2>المالية</h2>
-            <p>سجّل المصروفات والإيرادات لتعرف أين تذهب أموالك.</p>
-          </div>
-          <div class="stats-grid finance-stats">
-            <article class="stat-card"><span class="stat-label">الإيرادات</span><strong class="stat-value" id="finance-income-total">0</strong></article>
-            <article class="stat-card"><span class="stat-label">المصروفات</span><strong class="stat-value" id="finance-expense-total">0</strong></article>
-            <article class="stat-card"><span class="stat-label">الرصيد</span><strong class="stat-value" id="finance-balance-total">0</strong></article>
-          </div>
-          <form class="panel form-stack" id="finance-form">
-            <label for="finance-title-input">وصف العملية</label>
-            <input id="finance-title-input" type="text" maxlength="100" placeholder="اكتب وصف العملية" required>
-            <div class="form-row">
-              <div class="field">
-                <label for="finance-amount-input">المبلغ</label>
-                <input id="finance-amount-input" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="أدخل المبلغ" required>
-              </div>
-              <div class="field">
-                <label for="finance-type-input">النوع</label>
-                <select id="finance-type-input">
-                  <option value="expense">مصروف</option>
-                  <option value="income">إيراد</option>
-                </select>
-              </div>
-            </div>
-            <label for="finance-category-input">التصنيف</label>
-            <select id="finance-category-input">
-              <option value="عام">عام</option>
-              <option value="دراسة">دراسة</option>
-              <option value="طعام">طعام</option>
-              <option value="مواصلات">مواصلات</option>
-              <option value="ترفيه">ترفيه</option>
-              <option value="أخرى">أخرى</option>
+            <label for="task-priority-input">الأولوية</label>
+            <select id="task-priority-input">
+              <option value="low">منخفضة</option>
+              <option value="medium" selected>متوسطة</option>
+              <option value="high">عالية</option>
             </select>
-            <button class="primary-button" type="submit">تسجيل العملية</button>
-          </form>
-          <div class="section-heading"><h3>سجل العمليات</h3></div>
-          <div class="items-list" id="finance-list">
-            <div class="empty-state">لا توجد عمليات مسجلة.</div>
-          </div>
-        </section>
 
-        <!-- اليوميات والذكريات -->
-        <section class="page-section" id="journal-page" data-page="journal">
-          <div class="page-intro">
-            <p class="eyebrow">احتفظ بما يهمك</p>
-            <h2>يومياتي وذكرياتي</h2>
-            <p>اكتب فكرة أو موقفاً أو ذكرى تريد الرجوع إليها.</p>
+            <button type="submit" class="primary-button">إضافة المهمة</button>
+          </form>
+        </div>
+
+        <div class="task-filters">
+          <button data-task-filter="all">الكل</button>
+          <button data-task-filter="active">غير المنجزة</button>
+          <button data-task-filter="completed">المنجزة</button>
+        </div>
+
+        <div id="tasks-list"></div>
+      </section>
+
+      <!-- شرب الماء -->
+      <section class="page-section" id="water-page" data-page="water">
+        <header class="page-header">
+          <h1>شرب الماء</h1>
+        </header>
+
+        <div class="card">
+          <p>هدفك اليومي</p>
+          <strong id="water-current-count">0</strong>
+          <span>مل</span>
+
+          <label for="water-goal-input">الهدف اليومي بالملليلتر</label>
+          <input id="water-goal-input" type="number" min="1" value="2000">
+
+          <label for="water-amount-input">كمية الماء</label>
+          <input id="water-amount-input" type="number" min="1" value="250">
+
+          <button id="add-water-btn" class="primary-button">إضافة ماء</button>
+          <button id="reset-water-btn">إعادة ضبط اليوم</button>
+        </div>
+
+        <div class="card">
+          <h3>سجل الماء</h3>
+          <div id="water-log-list"></div>
+        </div>
+      </section>
+
+      <!-- الدراسة -->
+      <section class="page-section" id="study-page" data-page="study">
+        <header class="page-header">
+          <h1>جلسة التركيز</h1>
+        </header>
+
+        <div class="card study-card">
+          <label for="study-minutes-input">مدة الجلسة بالدقائق</label>
+          <input id="study-minutes-input" type="number" min="1" value="25">
+
+          <div id="study-timer-display" class="timer-display">25:00</div>
+
+          <div class="timer-controls">
+            <button id="start-study-btn" class="primary-button">ابدأ</button>
+            <button id="pause-study-btn">إيقاف مؤقت</button>
+            <button id="reset-study-btn">إعادة ضبط</button>
           </div>
-          <form class="panel form-stack" id="journal-form">
-            <label for="journal-title-input">عنوان الذكرى</label>
-            <input id="journal-title-input" type="text" maxlength="100" placeholder="اكتب عنواناً" required>
-            <label for="journal-content-input">التفاصيل</label>
-            <textarea id="journal-content-input" rows="5" maxlength="3000" placeholder="اكتب ما تريد الاحتفاظ به..."></textarea>
-            <label for="journal-mood-input">كيف كان شعورك؟ (اختياري)</label>
-            <select id="journal-mood-input">
-              <option value="">بدون تحديد</option>
-              <option value="سعيد">سعيد</option>
-              <option value="هادئ">هادئ</option>
-              <option value="متحمس">متحمس</option>
-              <option value="متعب">متعب</option>
-              <option value="متوتر">متوتر</option>
+        </div>
+
+        <div class="card">
+          <h3>جلساتي السابقة</h3>
+          <div id="study-sessions-list"></div>
+        </div>
+      </section>
+
+      <!-- المصروفات -->
+      <section class="page-section" id="finance-page" data-page="finance">
+        <header class="page-header">
+          <h1>مصروفي</h1>
+        </header>
+
+        <div class="card">
+          <form id="finance-form">
+            <label for="finance-title-input">اسم العملية</label>
+            <input id="finance-title-input" type="text" placeholder="مثلاً: شراء كتاب" required>
+
+            <label for="finance-amount-input">المبلغ</label>
+            <input id="finance-amount-input" type="number" min="0.01" step="0.01" required>
+
+            <label for="finance-type-input">النوع</label>
+            <select id="finance-type-input">
+              <option value="expense">مصروف</option>
+              <option value="income">دخل</option>
             </select>
-            <button class="primary-button" type="submit">حفظ الذكرى</button>
-          </form>
-          <div class="section-heading"><h3>ذكرياتك المحفوظة</h3></div>
-          <div class="items-list" id="journal-list">
-            <div class="empty-state">لم تحفظ أي ذكرى بعد.</div>
-          </div>
-        </section>
 
-        <!-- الرفاق -->
-        <section class="page-section" id="companions-page" data-page="companions">
-          <div class="page-intro">
-            <p class="eyebrow">مساحة لطيفة</p>
-            <h2>رفاقك</h2>
-            <p>تابع رفيقك الافتراضي واعتنِ به ضمن التطبيق.</p>
-          </div>
-          <article class="panel companion-card">
-            <div class="companion-avatar" id="companion-avatar" aria-hidden="true">🌱</div>
-            <h3 id="companion-name-display">رفيقك الصغير</h3>
-            <p class="muted-text" id="companion-status">ابدأ رحلتكما معاً.</p>
-            <div class="companion-stats">
-              <div><span>السعادة</span><strong id="companion-happiness">50</strong></div>
-              <div><span>النشاط</span><strong id="companion-energy">50</strong></div>
-            </div>
-            <div class="button-row">
-              <button class="primary-button" id="companion-play-btn" type="button">العب معه</button>
-              <button class="secondary-button" id="companion-care-btn" type="button">اعتنِ به</button>
-            </div>
-          </article>
-          <form class="panel form-stack" id="companion-name-form">
-            <label for="companion-name-input">اسم رفيقك</label>
-            <input id="companion-name-input" type="text" maxlength="30" placeholder="اكتب اسماً">
-            <button class="secondary-button" type="submit">حفظ الاسم</button>
+            <button type="submit" class="primary-button">إضافة</button>
           </form>
-        </section>
+        </div>
 
-        <!-- كبسولة الزمن -->
-        <section class="page-section" id="time-capsule-page" data-page="capsule">
-          <div class="page-intro">
-            <p class="eyebrow">رسالة إلى المستقبل</p>
-            <h2>كبسولة الزمن</h2>
-            <p>اكتب رسالة لنفسك وحدد التاريخ الذي تريد فتحها فيه.</p>
-          </div>
-          <form class="panel form-stack" id="capsule-form">
+        <div class="card">
+          <h3>السجل المالي</h3>
+          <div id="finance-list"></div>
+        </div>
+      </section>
+
+      <!-- اليوميات -->
+      <section class="page-section" id="journal-page" data-page="journal">
+        <header class="page-header">
+          <h1>يومياتي</h1>
+        </header>
+
+        <div class="card">
+          <form id="journal-form">
+            <label for="journal-title-input">عنوان اليوم</label>
+            <input id="journal-title-input" type="text" placeholder="عنوان بسيط">
+
+            <label for="journal-content-input">ما الذي تريد كتابته؟</label>
+            <textarea id="journal-content-input" placeholder="اكتب أفكارك ومشاعرك وأحداث يومك..."></textarea>
+
+            <button type="submit" class="primary-button">حفظ اليوميات</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h3>ذكرياتك المكتوبة</h3>
+          <div id="journal-list"></div>
+        </div>
+
+        <div class="card">
+          <h3>تسجيل صوتي</h3>
+          <p>تسجيل الصوت يعتمد على دعم المتصفح وأذونات الميكروفون.</p>
+          <button id="voice-record-btn">بدء التسجيل</button>
+          <button id="voice-stop-btn" disabled>إيقاف التسجيل</button>
+          <p id="voice-record-status">لم يبدأ التسجيل</p>
+          <div id="voice-recordings-list"></div>
+        </div>
+      </section>
+
+      <!-- الرفاق -->
+      <section class="page-section" id="companions-page" data-page="companions">
+        <header class="page-header">
+          <h1>رفاقك</h1>
+        </header>
+
+        <div class="card">
+          <div id="companions-list"></div>
+        </div>
+      </section>
+
+      <!-- كبسولة الزمن -->
+      <section class="page-section" id="time-capsule-page" data-page="capsule">
+        <header class="page-header">
+          <h1>كبسولة الزمن</h1>
+        </header>
+
+        <div class="card">
+          <form id="capsule-form">
             <label for="capsule-title-input">عنوان الرسالة</label>
-            <input id="capsule-title-input" type="text" maxlength="100" placeholder="اكتب عنوان الرسالة" required>
-            <label for="capsule-message-input">رسالتك</label>
-            <textarea id="capsule-message-input" rows="5" maxlength="3000" placeholder="اكتب رسالتك لنفسك..."></textarea>
-            <label for="capsule-date-input">تاريخ فتح الرسالة</label>
+            <input id="capsule-title-input" type="text" required>
+
+            <label for="capsule-content-input">رسالتك للمستقبل</label>
+            <textarea id="capsule-content-input" required></textarea>
+
+            <label for="capsule-date-input">موعد فتحها</label>
             <input id="capsule-date-input" type="date" required>
-            <button class="primary-button" type="submit">حفظ الكبسولة</button>
-          </form>
-          <div class="section-heading"><h3>كبسولاتي</h3></div>
-          <div class="items-list" id="capsules-list">
-            <div class="empty-state">لا توجد كبسولات محفوظة.</div>
-          </div>
-        </section>
 
-        <!-- الملف الشخصي -->
-        <section class="page-section" id="profile-page" data-page="profile">
-          <div class="page-intro">
-            <p class="eyebrow">بياناتك ومساحتك</p>
-            <h2>الملف الشخصي</h2>
-            <p>أدخل المعلومات التي تريد حفظها فقط. الحقول غير إلزامية ما لم يُذكر غير ذلك.</p>
-          </div>
-          <form class="panel form-stack" id="profile-form">
+            <button type="submit" class="primary-button">حفظ الكبسولة</button>
+          </form>
+        </div>
+
+        <div id="capsules-list"></div>
+      </section>
+
+      <!-- الملف الشخصي -->
+      <section class="page-section" id="profile-page" data-page="profile">
+        <header class="page-header">
+          <h1>ملفي الشخصي</h1>
+        </header>
+
+        <div class="card">
+          <form id="profile-form">
             <label for="profile-name-input">الاسم</label>
-            <input id="profile-name-input" type="text" maxlength="60" placeholder="اكتب اسمك">
-            <label for="profile-birth-input">تاريخ الميلاد</label>
-            <input id="profile-birth-input" type="date">
-            <div class="readonly-info"><span>العمر المحسوب</span><strong id="profile-age-display">غير محدد</strong></div>
-            <div class="form-row">
-              <div class="field">
-                <label for="profile-height-input">الطول (اختياري)</label>
-                <input id="profile-height-input" type="number" min="1" max="250" placeholder="أدخل القيمة">
-              </div>
-              <div class="field">
-                <label for="profile-weight-input">الوزن (اختياري)</label>
-                <input id="profile-weight-input" type="number" min="1" max="500" step="0.1" placeholder="أدخل القيمة">
-              </div>
-            </div>
-            <button class="primary-button" type="submit">حفظ الملف الشخصي</button>
+            <input id="profile-name-input" type="text">
+
+            <label for="profile-age-input">العمر</label>
+            <input id="profile-age-input" type="number" min="1">
+
+            <button type="submit" class="primary-button">حفظ الملف الشخصي</button>
           </form>
-        </section>
+        </div>
+      </section>
 
-        <!-- الإعدادات -->
-        <section class="page-section" id="settings-page" data-page="settings">
-          <div class="page-intro">
-            <p class="eyebrow">رتّب مساحتك كما تحب</p>
-            <h2>الإعدادات</h2>
-            <p>تحكم بالمظهر واحتفظ بنسخة من بياناتك.</p>
-          </div>
+      <!-- الإعدادات -->
+      <section class="page-section" id="settings-page" data-page="settings">
+        <header class="page-header">
+          <h1>الإعدادات</h1>
+        </header>
 
-          <article class="panel form-stack">
-            <h3>المظهر</h3>
-            <label for="theme-select">نمط الواجهة</label>
-            <select id="theme-select">
-              <option value="dark">داكن</option>
-              <option value="light">فاتح</option>
-              <option value="system">حسب الجهاز</option>
-            </select>
-            <label for="background-color-input">لون الخلفية</label>
-            <input id="background-color-input" type="color" value="#101827">
-            <label for="card-color-input">لون البطاقات</label>
-            <input id="card-color-input" type="color" value="#1b2638">
-            <label for="text-color-input">لون النصوص</label>
-            <input id="text-color-input" type="color" value="#f1f5f9">
-            <label for="accent-color-input">لون الأزرار والأيقونات</label>
-            <input id="accent-color-input" type="color" value="#38bdf8">
-            <label for="highlight-color-input">لون النصوص المميزة</label>
-            <input id="highlight-color-input" type="color" value="#7dd3fc">
-            <label for="background-image-input">صورة خلفية اختيارية</label>
-            <input id="background-image-input" type="file" accept="image/*">
-            <button class="secondary-button" id="remove-background-image-btn" type="button">إزالة صورة الخلفية</button>
-            <button class="primary-button" id="save-appearance-btn" type="button">حفظ المظهر</button>
-          </article>
+        <div class="card">
+          <h3>المظهر</h3>
 
-          <article class="panel form-stack">
-            <h3>البيانات والنسخ الاحتياطي</h3>
-            <p class="muted-text">يمكنك تصدير نسخة من بياناتك أو استيراد نسخة محفوظة سابقاً.</p>
-            <button class="secondary-button" id="export-backup-btn" type="button">تصدير نسخة احتياطية</button>
-            <label for="import-backup-input">استيراد نسخة احتياطية</label>
-            <input id="import-backup-input" type="file" accept="application/json,.json">
-          </article>
+          <label for="theme-select">الوضع</label>
+          <select id="theme-select">
+            <option value="system">حسب الجهاز</option>
+            <option value="dark">داكن</option>
+            <option value="light">فاتح</option>
+          </select>
 
-          <article class="panel form-stack">
-            <h3>التذكيرات داخل التطبيق</h3>
-            <p class="muted-text">التذكيرات داخل التطبيق قد لا تعمل بعد إغلاقه أو في الخلفية، بحسب دعم الجهاز.</p>
-            <label class="switch-row" for="reminders-enabled-input">
-              <span>تفعيل التذكيرات أثناء استخدام التطبيق</span>
-              <input id="reminders-enabled-input" type="checkbox">
-            </label>
-            <label for="reminder-interval-input">الفاصل بين التذكيرات (بالدقائق)</label>
-            <input id="reminder-interval-input" type="number" min="15" max="360" value="60">
-            <button class="primary-button" id="save-reminders-btn" type="button">حفظ إعدادات التذكير</button>
-          </article>
+          <label for="accent-color-input">لون الواجهة</label>
+          <input id="accent-color-input" type="color" value="#38bdf8">
+        </div>
 
-          <article class="panel form-stack">
-            <h3>قفل التطبيق</h3>
-            <p class="muted-text">رمز القفل داخل التطبيق ليس بديلاً عن قفل الهاتف، ولا يوفّر حماية أمنية للنظام.</p>
-            <label for="app-pin-input">رمز القفل</label>
-            <input id="app-pin-input" type="password" inputmode="numeric" maxlength="8" placeholder="أدخل رمزاً">
-            <button class="secondary-button" id="save-pin-btn" type="button">حفظ الرمز</button>
-            <button class="text-button" id="remove-pin-btn" type="button">إزالة رمز القفل</button>
-          </article>
+        <div class="card">
+          <h3>خلفية التطبيق</h3>
+          <input id="background-image-input" type="file" accept="image/*">
+          <button id="remove-background-btn">إزالة الخلفية</button>
+        </div>
 
-          <article class="panel form-stack">
-            <h3>حول التطبيق</h3>
-            <p>أثر يومي — اصنع من يومك شيئاً يستحق التذكّر.</p>
-            <p class="muted-text">برمجة وتطوير: كرم محمد الشيخ</p>
-            <span class="muted-text" id="app-version-label">الإصدار 1.0</span>
-          </article>
-        </section>
-      </main>
+        <div class="card">
+          <h3>النسخ الاحتياطي</h3>
+          <button id="export-backup-btn">تصدير البيانات</button>
 
-      <nav class="bottom-nav" id="bottom-nav" aria-label="التنقل الرئيسي">
-        <button class="nav-item active" type="button" data-page-target="home"><span>⌂</span><small>الرئيسية</small></button>
-        <button class="nav-item" type="button" data-page-target="tasks"><span>✓</span><small>المهام</small></button>
-        <button class="nav-item" type="button" data-page-target="water"><span>♧</span><small>الماء</small></button>
-        <button class="nav-item" type="button" data-page-target="study"><span>◷</span><small>الدراسة</small></button>
-        <button class="nav-item" type="button" data-page-target="settings"><span>⚙</span><small>الإعدادات</small></button>
-      </nav>
+          <label for="import-backup-input">استعادة نسخة احتياطية</label>
+          <input id="import-backup-input" type="file" accept=".json,application/json">
+        </div>
 
-      <div class="modal-backdrop" id="app-modal" hidden>
-        <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <div class="modal-header">
-            <h2 id="modal-title">تنبيه</h2>
-            <button class="icon-button" id="modal-close-btn" type="button" aria-label="إغلاق">×</button>
-          </div>
-          <div id="modal-body"></div>
-          <div class="modal-actions" id="modal-actions">
-            <button class="primary-button" id="modal-confirm-btn" type="button">حسناً</button>
-          </div>
-        </section>
+        <div class="card">
+          <h3>التذكيرات</h3>
+          <label>
+            <input id="reminders-enabled-input" type="checkbox">
+            تفعيل التذكيرات داخل التطبيق
+          </label>
+
+          <label for="reminder-interval-input">الفاصل بالدقائق</label>
+          <input id="reminder-interval-input" type="number" min="1" value="60">
+
+          <button id="save-reminders-btn" class="primary-button">حفظ التذكيرات</button>
+          <p>التنبيهات التي تعمل عند إغلاق التطبيق تحتاج إلى دعم وإعدادات Android أصلية.</p>
+        </div>
+
+        <div class="card">
+          <h3>رمز الدخول</h3>
+          <label for="app-pin-input">رمز PIN</label>
+          <input id="app-pin-input" type="password" inputmode="numeric" maxlength="8">
+
+          <button id="save-app-pin-btn">حفظ الرمز</button>
+          <button id="remove-app-pin-btn">إزالة الرمز</button>
+          <p>قفل التطبيق الحقيقي يحتاج إلى تنفيذ Android أصلي.</p>
+        </div>
+
+        <div class="card">
+          <h3>حول التطبيق</h3>
+          <p>أثر يومي</p>
+          <p>اصنع من يومك شيئاً يستحق التذكّر.</p>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- شريط التنقل -->
+    <nav id="bottom-nav" class="bottom-nav">
+      <button data-page-target="home" class="active">الرئيسية</button>
+      <button data-page-target="tasks">المهام</button>
+      <button data-page-target="water">الماء</button>
+      <button data-page-target="study">الدراسة</button>
+      <button data-page-target="settings">الإعدادات</button>
+    </nav>
+
+    <!-- نافذة التطبيق -->
+    <div id="app-modal" class="modal" hidden>
+      <div class="modal-content">
+        <button id="close-modal-btn" aria-label="إغلاق">✕</button>
+        <div id="modal-body"></div>
       </div>
-
-      <div class="toast" id="app-toast" role="status" aria-live="polite"></div>
     </div>
+
+    <!-- رسالة التنبيه -->
+    <div id="app-toast" class="toast" role="status"></div>
+
   </div>
 
   <script src="app.js"></script>
