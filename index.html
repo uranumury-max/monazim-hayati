@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>منظم حياتي</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app" class="theme-dark card-style-1">
+    <!-- الشريط العلوي والعمر الديناميكي -->
+    <header class="top-bar">
+      <div>
+        <h1 class="app-title">منظم حياتي</h1>
+        <span id="live-age" class="age-badge">العمر الديناميكي قيد الحساب</span>
+      </div>
+      <div class="top-actions">
+        <button id="theme-toggle-btn" class="btn-icon" type="button">ليلي/نهاري</button>
+        <button id="lock-btn" class="btn-icon" type="button">قفل</button>
+      </div>
+    </header>
+
+    <!-- شاشة قفل PIN / البصمة -->
+    <section id="lock-screen" class="lock-overlay hidden">
+      <div class="card lock-card">
+        <h2>قفل منظم حياتي</h2>
+        <p id="lock-msg">أدخل الرمز السري للمتابعة</p>
+        <input id="pin-input" type="password" inputmode="numeric" placeholder="أدخل رمز PIN" />
+        <button id="unlock-btn" class="btn-primary" type="button">فتح القفل</button>
+      </div>
+    </section>
+
+    <!-- التنقل بين الأقسام -->
+    <nav class="nav-tabs">
+      <button class="nav-btn active" data-tab="profile-tab" type="button">الملف والماء</button>
+      <button class="nav-btn" data-tab="tasks-tab" type="button">المهام والدراسة</button>
+      <button class="nav-btn" data-tab="money-tab" type="button">المالية</button>
+      <button class="nav-btn" data-tab="extras-tab" type="button">الرفاق والذكريات</button>
+      <button class="nav-btn" data-tab="settings-tab" type="button">الإعدادات</button>
+    </nav>
+
+    <main class="main-content">
+      <!-- 1. الملف الشخصي والعمر وحاسبة الماء -->
+      <section id="profile-tab" class="tab-panel active">
+        <div class="card">
+          <h2>بطاقة التعريف والعمر الديناميكي</h2>
+          <div class="grid-2">
+            <input id="user-name" type="text" placeholder="الاسم" />
+            <input id="user-dob" type="date" />
+            <input id="user-weight" type="number" placeholder="الوزن (كغ)" />
+            <input id="user-height" type="number" placeholder="الطول (سم)" />
+            <select id="user-gender">
+              <option value="male">ذكر</option>
+              <option value="female">أنثى</option>
+            </select>
+            <select id="user-role">
+              <option value="student">طالب</option>
+              <option value="employee">موظف</option>
+              <option value="household">رب بيت</option>
+            </select>
+          </div>
+          <button id="save-profile-btn" class="btn-primary" type="button">حفظ وتحديث خطتي</button>
+          <p id="exact-age-display" class="info-text"></p>
+        </div>
+
+        <div class="card">
+          <h2>حاسبة الماء اليومية</h2>
+          <p id="water-goal-text">الهدف اليومي يظهر هنا</p>
+          <div class="water-meter">
+            <div id="water-fill" class="water-fill"></div>
+            <span id="water-percent">0%</span>
+          </div>
+          <div class="row-actions">
+            <button id="add-cup-btn" class="btn-primary" type="button">+ شربت كأس ماء (250 مل)</button>
+            <button id="reset-water-btn" class="btn-secondary" type="button">تصفير اليوم</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>المزاج وإنجازات اليوم</h2>
+          <div class="row-actions">
+            <button class="btn-secondary mood-btn" data-mood="normal" type="button">عادي</button>
+            <button class="btn-secondary mood-btn" data-mood="stressed" type="button">متضايق / تعبان</button>
+            <button class="btn-secondary mood-btn" data-mood="travel" type="button">وضع الرحلة</button>
+          </div>
+          <p id="mood-advice" class="info-text"></p>
+          <ul id="daily-achievements" class="list-box"></ul>
+        </div>
+      </section>
+
+      <!-- 2. المهام والدراسة والمساعد الصوتي وقفل التطبيقات -->
+      <section id="tasks-tab" class="tab-panel">
+        <div class="card">
+          <h2>إضافة مهمة أو حصة دراسة</h2>
+          <input id="task-title" type="text" placeholder="مثال: وظيفة رياضيات أو مراجعة فيزياء" />
+          <div class="grid-2">
+            <input id="task-time" type="time" />
+            <select id="task-type">
+              <option value="study">دراسة / تركيز</option>
+              <option value="task">مهمة يومية</option>
+            </select>
+          </div>
+          <button id="add-task-btn" class="btn-primary" type="button">إضافة للجدول</button>
+          <ul id="tasks-list" class="list-box"></ul>
+        </div>
+
+        <div class="card">
+          <h2>المساعد الصوتي السريع (أوفلاين + تحويل نص)</h2>
+          <div class="row-actions">
+            <button id="voice-record-btn" class="btn-primary" type="button">تسجيل صوتي</button>
+            <button id="voice-stop-btn" class="btn-secondary" type="button">إيقاف التسجيل</button>
+            <button id="voice-transcribe-btn" class="btn-secondary" type="button">تحويل الحكي لنص</button>
+          </div>
+          <textarea id="voice-note-text" rows="2" placeholder="النص المحوّل أو ملاحظة سريعة..."></textarea>
+          <button id="save-voice-task-btn" class="btn-primary" type="button">حفظ كمهمة بالجدول</button>
+          <div id="voice-clips-list" class="list-box"></div>
+        </div>
+
+        <div class="card">
+          <h2>وضع التركيز وحظر التطبيقات</h2>
+          <p class="info-text">أثناء التركيز، محاولة فتح تطبيق محظور تطلع رسالة عتاب خفيفة بدل التكسير والتعقيد.</p>
+          <div class="row-actions">
+            <input id="blocked-app-input" type="text" placeholder="اسم تطبيق ممنوع (مثال: تيك توك)" />
+            <button id="add-blocked-app-btn" class="btn-secondary" type="button">حظر</button>
+          </div>
+          <ul id="blocked-apps-list" class="list-box"></ul>
+          <button id="toggle-focus-btn" class="btn-primary" type="button">تفعيل / إيقاف وضع التركيز</button>
+          <div id="focus-banter-box" class="banter-box hidden"></div>
+        </div>
+      </section>
+
+      <!-- 3. المحفظة المالية -->
+      <section id="money-tab" class="tab-panel">
+        <div class="card">
+          <h2>توزيع الدخل والمصروف اليومي</h2>
+          <input id="income-amount" type="number" placeholder="مبلغ دخل أو مصروف اليوم" />
+          <div class="grid-3">
+            <input id="split-home" type="number" placeholder="للبيت %" value="40" />
+            <input id="split-personal" type="number" placeholder="شخصي %" value="30" />
+            <input id="split-savings" type="number" placeholder="ادخار %" value="30" />
+          </div>
+          <button id="calc-split-btn" class="btn-primary" type="button">تقسيم المبلغ</button>
+          <p id="split-result" class="info-text"></p>
+        </div>
+
+        <div class="card">
+          <h2>دفتر المشتريات والمدخرات</h2>
+          <div class="grid-2">
+            <input id="expense-item" type="text" placeholder="شو اشتريت اليوم؟" />
+            <input id="expense-cost" type="number" placeholder="الكلفة" />
+          </div>
+          <button id="add-expense-btn" class="btn-primary" type="button">تسجيل العملية</button>
+          <p id="total-spent" class="info-text">إجمالي المصروف: 0</p>
+          <ul id="expenses-list" class="list-box"></ul>
+        </div>
+      </section>
+
+      <!-- 4. أصدقاء الشاشة واللعبة وكبسولة الزمن -->
+      <section id="extras-tab" class="tab-panel">
+        <div class="card">
+          <h2>أصدقاء الشاشة ورسائل التذكير</h2>
+          <div class="row-actions">
+            <select id="pet-select">
+              <option value="قطة">قطة</option>
+              <option value="بومة">بومة</option>
+              <option value="ثعلب">ثعلب</option>
+              <option value="أرنب">أرنب</option>
+            </select>
+            <button id="add-pet-btn" class="btn-primary" type="button">إضافة رفيق</button>
+            <button id="pet-remind-btn" class="btn-secondary" type="button">رسالة تذكير</button>
+          </div>
+          <ul id="pets-list" class="list-box"></ul>
+          <p id="pet-message" class="info-text"></p>
+        </div>
+
+        <div class="card">
+          <h2>لعبة تفريغ الضغط السريعة</h2>
+          <p class="info-text">اضغط الهدف خلال 10 ثواني وجمع نقاط للتسلية!</p>
+          <div class="row-actions">
+            <button id="start-game-btn" class="btn-primary" type="button">ابدأ اللعبة</button>
+            <span id="game-score">النقاط: 0 | الوقت: 10s</span>
+          </div>
+          <div id="game-arena" class="game-arena">
+            <button id="game-target" class="game-target hidden" type="button">اضغطني!</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>كبسولة الزمن (رسالة للمستقبل)</h2>
+          <textarea id="capsule-text" rows="2" placeholder="اكتب رسالتك أو هدفك للمستقبل..."></textarea>
+          <input id="capsule-date" type="date" />
+          <button id="save-capsule-btn" class="btn-primary" type="button">حفظ في كبسولة الزمن</button>
+          <ul id="capsules-list" class="list-box"></ul>
+        </div>
+      </section>
+
+      <!-- 5. الإعدادات والتخصيص والنسخ الاحتياطي -->
+      <section id="settings-tab" class="tab-panel">
+        <div class="card">
+          <h2>شكل الكروت والألوان والخلفية والقفل</h2>
+          <label class="label-block">اختر شكل الكروت:</label>
+          <select id="card-style-select">
+            <option value="card-style-1">شكل 1: كلاسيكي مرتب</option>
+            <option value="card-style-2">شكل 2: زوايا ناعمة</option>
+            <option value="card-style-3">شكل 3: إطار ملون</option>
+            <option value="card-style-4">شكل 4: بطاقات متدرجة</option>
+            <option value="card-style-5">شكل 5: زجاجي عصري</option>
+          </select>
+
+          <div class="grid-2">
+            <div>
+              <label class="label-block">اللون الرئيسي:</label>
+              <input id="accent-color-picker" type="color" value="#38bdf8" />
+            </div>
+            <div>
+              <label class="label-block">صورة خلفية من جهازك:</label>
+              <input id="bg-image-input" type="file" accept="image/*" />
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <input id="new-pin-input" type="password" inputmode="numeric" placeholder="تعيين/تغيير رمز PIN" />
+            <select id="banter-tone-select">
+              <option value="funny">عتاب خفيف ومضحك</option>
+              <option value="hype">تحفيز حماسي</option>
+              <option value="calm">هادئ ومباشر</option>
+            </select>
+          </div>
+          <button id="save-settings-btn" class="btn-primary" type="button">حفظ الإعدادات</button>
+        </div>
+
+        <div class="card">
+          <h2>النسخ الاحتياطي ونقل البيانات لموبايل جديد</h2>
+          <div class="row-actions">
+            <button id="export-backup-btn" class="btn-primary" type="button">تصدير نسخة احتياطية</button>
+            <label class="btn-secondary file-label">
+              استيراد نسخة
+              <input id="import-backup-input" type="file" accept=".json" hidden />
+            </label>
+          </div>
+          <textarea id="backup-json-box" rows="3" placeholder="ملف النسخة الاحتياطية يظهر هنا أو الصقه للاستيراد..."></textarea>
+        </div>
+      </section>
+    </main>
+
+    <!-- التوقيع الرسمي الثابت -->
+    <footer class="app-footer">
+      <p>«برمجة و تطوير: كرم محمد الشيخ»</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
