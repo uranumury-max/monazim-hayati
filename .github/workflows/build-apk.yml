@@ -1,3 +1,4 @@
+
 name: Build Android APK
 
 on:
@@ -24,6 +25,9 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
+      - name: Install Capacitor dependencies
+        run: npm install
+
       - name: Prepare web assets
         run: |
           mkdir -p www
@@ -32,11 +36,9 @@ jobs:
 
       - name: Initialize Capacitor Android project
         run: |
-          npm init -y
-          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
           npx cap init "Monazim Hayati" "com.karam.monazimhayati" --web-dir=www
           npx cap add android
-          npx cap copy android
+          npx cap sync android
 
       - name: Build Debug APK
         run: |
