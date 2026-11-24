@@ -1,145 +1,115 @@
+
 "use strict";
 
 /* أثر يومي — التطبيق الرئيسي */
 
 const STORAGE_KEY = "monazim_hayati_v1";
+const TIMER_KEY = "athar_study_timer_v1";
+
 const $ = (id) => document.getElementById(id);
 
-function localDateKey(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+const today = () => new Date().toISOString().slice(0, 10);
 
-function createDefaultState() {
-  return {
-    profile: {
-      name: "",
-      dob: "",
-      height: "",
-      weight: "",
-      completed: false
-    },
-    tasks: [],
-    waterLog: {},
-    waterGoal: 0,
-    waterServing: 250,
-    studySessions: [],
-    finance: [],
-    journal: [],
-    dailyNotes: {},
-    capsules: [],
-    companion: {
-      name: "رفيقك الصغير",
-      happiness: 50,
-      energy: 50
-    },
-    settings: {
-      theme: "dark",
-      backgroundColor: "#101827",
-      cardColor: "#1b2638",
-      textColor: "#f1f5f9",
-      accent: "#38bdf8",
-      highlight: "#7dd3fc",
-      backgroundImage: "",
-      remindersEnabled: false,
-      reminderInterval: 60,
-      pin: ""
-    }
-  };
-}
+const makeId = () =>
+  Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
-function loadState() {
-  const base = createDefaultState();
+const escapeHTML = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
 
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return base;
-
-    const old = JSON.parse(raw);
-    const state = {
-      ...base,
-      ...old,
-      profile: { ...base.profile, ...(old.profile || {}) },
-      settings: { ...base.settings, ...(old.settings || {}) },
-      companion: { ...base.companion, ...(old.companion || {}) }
-    };
-
-    // نقل بيانات الماء القديمة إلى سجل اليوم.
-    if (!state.waterLog || typeof state.waterLog !== "object") {
-      state.waterLog = {};
-    }
-
-    if (Number(old.waterMl) > 0 && !state.waterLog[localDateKey()]) {
-      state.waterLog[localDateKey()] = [{
-        id: makeId(),
-        amount: Number(old.waterMl),
-        time: new Date().toISOString()
-      }];
-    }
-
-    // نقل المصروفات القديمة.
-    if (!Array.isArray(state.finance)) {
-      state.finance = [];
-    }
-
-    if (state.finance.length === 0 && Array.isArray(old.expenses)) {
-      state.finance = old.expenses.map((item) => ({
-        id: makeId(),
-        title: String(item.item || "عملية قديمة"),
-        amount: Number(item.cost) || 0,
-        type: "expense",
-        category: "عام",
-        date: localDateKey()
-      }));
-    }
-
-    // نقل المهام القديمة.
-    state.tasks = Array.isArray(state.tasks) ? state.tasks : [];
-    state.tasks = state.tasks.map((task) => ({
-      id: task.id || makeId(),
-      title: String(task.title || "مهمة"),
-      date: task.date || localDateKey(),
-      priority: task.priority || "normal",
-      color: task.color || "#38bdf8",
-      done: Boolean(task.done),
-      createdAt: task.createdAt || new Date().toISOString()
-    }));
-
-    state.studySessions = Array.isArray(state.studySessions)
-      ? state.studySessions : [];
-    state.journal = Array.isArray(state.journal)
-      ? state.journal : [];
-    state.capsules = Array.isArray(state.capsules)
-      ? state.capsules : [];
-    state.dailyNotes = state.dailyNotes || {};
-
-    return state;
-  } catch (error) {
-    console.error("تعذر تحميل البيانات:", error);
-    return base;
+const defaultState = {
+  profile: {
+    name: "",
+    age: ""
+  },
+  tasks: [],
+  water: {
+    date: today(),
+    count: 0,
+    goal: 2000,
+    log: []
+  },
+  study: {
+    sessions: []
+  },
+  finance: [],
+  journal: [],
+  dailyNotes: {},
+  capsules: [],
+  companion: {},
+  settings: {
+    theme: "system",
+    accentColor: "#38bdf8",
+    backgroundImage: "",
+    remindersEnabled: false,
+    reminderInterval: 60,
+    pin: ""
   }
-}
+};
 
 let state = loadState();
-let currentTaskFilter = "all";
-let studyTimer = null;
-let studyEndTime = 0;
-let studyDuration = 0;
-let toastTimer = null;
-let reminderTimer = null;
+let activeTaskFilter = "all";
+let studyInterval = null;
+let studyTimer = loadTimer();
+let mediaRecorder = null;
+let recordedChunks = [];
+let voiceRecordings = [];
+let reminderInterval = null;
 
-function makeId() {
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+function loadState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    if (!saved) {
+      return structuredClone(defaultState);
+    }
+
+    const parsed = JSON.parse(saved);
+
+    return {
+      ...structuredClone(defaultState),
+      ...parsed,
+      profile: {
+        ...defaultState.profile,
+        ...(parsed.profile || {})
+      },
+      water: {
+        ...defaultState.water,
+        ...(parsed.water || {})
+      },
+      study: {
+        ...defaultState.study,
+        ...(parsed.study || {})
+      },
+      settings: {
+        ...defaultState.settings,
+        ...(parsed.settings || {})
+      },
+      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
+      finance: Array.isArray(parsed.finance) ? parsed.finance : [],
+      journal: Array.isArray(parsed.journal) ? parsed.journal : [],
+      capsules: Array.isArray(parsed.capsules) ? parsed.capsules : [],
+      dailyNotes: parsed.dailyNotes || {}
+    };
+  } catch (error) {
+    console.error("تعذر تحميل البيانات:", error);
+    return structuredClone(defaultState);
+  }
 }
 
 function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
   } catch (error) {
     console.error("تعذر حفظ البيانات:", error);
-    showToast("مساحة التخزين ممتلئة. جرّب إزالة صورة الخلفية.");
+    showToast("تعذر الحفظ. قد تكون مساحة التخزين ممتلئة.");
+    return false;
   }
 }
 
@@ -150,143 +120,41 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.add("show");
 
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
+  clearTimeout(showToast.timeout);
+  showToast.timeout = setTimeout(() => {
     toast.classList.remove("show");
-  }, 2600);
+  }, 2800);
 }
 
-function showModal(title, message) {
-  const modal = $("app-modal");
-  if (!modal) {
-    alert(message);
-    return;
+function formatDate(date) {
+  if (!date) return "";
+
+  try {
+    return new Date(date + "T00:00:00").toLocaleDateString("ar", {
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    });
+  } catch {
+    return date;
   }
-
-  $("modal-title").textContent = title;
-  $("modal-body").textContent = message;
-  modal.hidden = false;
 }
 
-function closeModal() {
-  if ($("app-modal")) $("app-modal").hidden = true;
-}
-
-function formatNumber(value) {
-  return new Intl.NumberFormat("ar").format(Number(value) || 0);
-}
-
-function formatMoney(value) {
-  return formatNumber(Number(value).toFixed(2));
-}
-
-function formatDate(dateString) {
-  if (!dateString) return "";
-  const date = new Date(`${dateString}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return dateString;
-
-  return date.toLocaleDateString("ar", {
-    year: "numeric",
-    month: "short",
-    day: "numeric"
-  });
-}
-
-function calculateAge(dob) {
-  if (!dob) return null;
-
-  const birth = new Date(`${dob}T00:00:00`);
-  const today = new Date();
-
-  if (Number.isNaN(birth.getTime()) || birth > today) return null;
-
-  let years = today.getFullYear() - birth.getFullYear();
-  let months = today.getMonth() - birth.getMonth();
-  let days = today.getDate() - birth.getDate();
-
-  if (days < 0) {
-    months--;
-    days += new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      0
-    ).getDate();
+function showEmpty(container, message = "لا توجد بيانات بعد.") {
+  if (container) {
+    container.innerHTML =
+      `<div class="empty-state">${escapeHTML(message)}</div>`;
   }
-
-  if (months < 0) {
-    years--;
-    months += 12;
-  }
-
-  return { years, months, days };
 }
 
-function getTodayWaterEntries() {
-  const entries = state.waterLog[localDateKey()];
-  return Array.isArray(entries) ? entries : [];
-}
+/* التنقل بين الصفحات */
 
-function getTodayWaterTotal() {
-  return getTodayWaterEntries().reduce(
-    (sum, entry) => sum + (Number(entry.amount) || 0),
-    0
-  );
-}
-
-function getTodayStudyMinutes() {
-  return state.studySessions
-    .filter((session) => session.date === localDateKey())
-    .reduce((sum, session) => sum + (Number(session.minutes) || 0), 0);
-}
-
-function setText(id, value) {
-  const element = $(id);
-  if (element) element.textContent = value;
-}
-
-function applyAppearance() {
-  const root = document.documentElement;
-  const settings = state.settings;
-
-  root.style.setProperty("--bg-main", settings.backgroundColor);
-  root.style.setProperty("--bg-card", settings.cardColor);
-  root.style.setProperty("--text-main", settings.textColor);
-  root.style.setProperty("--accent", settings.accent);
-  root.style.setProperty("--highlight", settings.highlight);
-
-  const app = $("app");
-  if (app) {
-    app.classList.remove("theme-dark", "theme-light");
-    app.classList.add(
-      settings.theme === "light" ? "theme-light" : "theme-dark"
-    );
-
-    if (settings.backgroundImage) {
-      app.style.setProperty(
-        "--app-background-image",
-        `url("${settings.backgroundImage}")`
-      );
-    } else {
-      app.style.removeProperty("--app-background-image");
-    }
-  }
-
-  document.documentElement.style.colorScheme =
-    settings.theme === "light" ? "light" : "dark";
-}
-
-function navigateTo(pageName) {
-  const page = document.querySelector(
-    `.page-section[data-page="${pageName}"]`
-  );
-
-  if (!page) return;
-
-  document.querySelectorAll(".page-section").forEach((section) => {
-    section.classList.toggle("active", section === page);
+function showPage(pageName) {
+  document.querySelectorAll(".page-section").forEach((page) => {
+    page.classList.toggle("active", page.dataset.page === pageName);
   });
 
-  document.querySelectorAll(".nav-item").forEach((button) => {
+  document.querySelectorAll("[data-page-target]").forEach((button) => {
     button.classList.toggle(
       "active",
       button.dataset.pageTarget === pageName
@@ -296,584 +164,927 @@ function navigateTo(pageName) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function renderHome() {
-  const today = new Date();
+function bindNavigation() {
+  document.querySelectorAll("[data-page-target]").forEach((button) => {
+    button.addEventListener("click", () => {
+      showPage(button.dataset.pageTarget);
+    });
+  });
 
-  setText(
-    "today-label",
-    today.toLocaleDateString("ar", {
-      weekday: "long",
-      day: "numeric",
-      month: "long"
-    })
-  );
-
-  setText(
-    "welcome-title",
-    state.profile.name
-      ? `أهلاً ${state.profile.name} 👋`
-      : "أهلاً بك 👋"
-  );
-
-  const doneTasks = state.tasks.filter(
-    (task) => task.done && task.date === localDateKey()
-  ).length;
-
-  setText("home-tasks-done", formatNumber(doneTasks));
-  setText("home-study-time", `${formatNumber(getTodayStudyMinutes())} د`);
-  setText("home-water-total", `${formatNumber(getTodayWaterTotal())} مل`);
-  setText("home-achievements", formatNumber(doneTasks + state.studySessions.filter(
-    (session) => session.date === localDateKey()
-  ).length));
-
-  const note = state.dailyNotes[localDateKey()] || "";
-  if ($("daily-note-input") && $("daily-note-input") !== document.activeElement) {
-    $("daily-note-input").value = note;
-  }
+  $("header-profile-btn")?.addEventListener("click", () => {
+    showPage("profile");
+  });
 }
 
-function createItem(title, description, actions = []) {
-  const item = document.createElement("article");
-  item.className = "list-item";
+/* الصفحة الرئيسية والملاحظات */
 
-  const content = document.createElement("div");
-  content.className = "list-item-content";
+function renderHome() {
+  const pending = state.tasks.filter((task) => !task.completed).length;
 
-  const heading = document.createElement("strong");
-  heading.textContent = title;
-  content.appendChild(heading);
-
-  if (description) {
-    const detail = document.createElement("p");
-    detail.className = "muted-text";
-    detail.textContent = description;
-    content.appendChild(detail);
+  if ($("home-tasks-count")) {
+    $("home-tasks-count").textContent = pending;
   }
 
-  item.appendChild(content);
+  if ($("home-water-count")) {
+    $("home-water-count").textContent = state.water.count;
+  }
 
-  if (actions.length) {
-    const actionBox = document.createElement("div");
-    actionBox.className = "row-actions";
+  if ($("home-study-count")) {
+    $("home-study-count").textContent = state.study.sessions.length;
+  }
 
-    actions.forEach((action) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = action.className || "secondary-button";
-      button.textContent = action.label;
-      button.addEventListener("click", action.onClick);
-      actionBox.appendChild(button);
+  const greeting = $("home-greeting");
+  if (greeting) {
+    greeting.textContent = state.profile.name
+      ? `أهلاً ${state.profile.name} 🌱`
+      : "أهلاً بك 🌱";
+  }
+
+  const noteInput = $("daily-note-input");
+  if (noteInput) {
+    noteInput.value = state.dailyNotes[today()] || "";
+  }
+
+  renderDailyNotesArchive();
+}
+
+function saveDailyNote() {
+  const input = $("daily-note-input");
+  if (!input) return;
+
+  const value = input.value.trim();
+
+  if (value) {
+    state.dailyNotes[today()] = value;
+  } else {
+    delete state.dailyNotes[today()];
+  }
+
+  saveState();
+  renderDailyNotesArchive();
+
+  if ($("daily-note-status")) {
+    $("daily-note-status").textContent = "تم حفظ ملاحظة اليوم.";
+  }
+
+  showToast("تم حفظ الملاحظة");
+}
+
+function renderDailyNotesArchive() {
+  const container = $("daily-notes-archive-list");
+  if (!container) return;
+
+  const entries = Object.entries(state.dailyNotes)
+    .filter(([date, note]) => date !== today() && note)
+    .sort(([a], [b]) => b.localeCompare(a));
+
+  if (!entries.length) {
+    showEmpty(container, "ستظهر هنا ملاحظات الأيام السابقة.");
+    return;
+  }
+
+  container.innerHTML = entries.map(([date, note]) => `
+    <div class="list-item">
+      <strong>${escapeHTML(formatDate(date))}</strong>
+      <p>${escapeHTML(note)}</p>
+    </div>
+  `).join("");
+}
+
+/* المهام */
+
+function bindTasks() {
+  $("task-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const title = $("task-title-input")?.value.trim();
+    if (!title) return;
+
+    state.tasks.unshift({
+      id: makeId(),
+      title,
+      date: $("task-date-input")?.value || "",
+      priority: $("task-priority-input")?.value || "medium",
+      completed: false,
+      createdAt: Date.now()
     });
 
-    item.appendChild(actionBox);
-  }
+    saveState();
+    event.target.reset();
+    renderTasks();
+    renderHome();
+    showToast("تمت إضافة المهمة");
+  });
 
-  return item;
+  document.querySelectorAll("[data-task-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeTaskFilter = button.dataset.taskFilter;
+      renderTasks();
+    });
+  });
 }
 
 function renderTasks() {
-  const list = $("tasks-list");
-  if (!list) return;
-
-  list.replaceChildren();
+  const container = $("tasks-list");
+  if (!container) return;
 
   let tasks = [...state.tasks];
 
-  if (currentTaskFilter === "today") {
-    tasks = tasks.filter((task) => task.date === localDateKey());
-  } else if (currentTaskFilter === "active") {
-    tasks = tasks.filter((task) => !task.done);
-  } else if (currentTaskFilter === "done") {
-    tasks = tasks.filter((task) => task.done);
+  if (activeTaskFilter === "active") {
+    tasks = tasks.filter((task) => !task.completed);
+  } else if (activeTaskFilter === "completed") {
+    tasks = tasks.filter((task) => task.completed);
   }
-
-  tasks.sort((a, b) => {
-    if (a.done !== b.done) return Number(a.done) - Number(b.done);
-    return a.date.localeCompare(b.date);
-  });
 
   if (!tasks.length) {
-    list.innerHTML = '<div class="empty-state">لا توجد مهام في هذا العرض.</div>';
+    showEmpty(container, "لا توجد مهام في هذا القسم.");
     return;
   }
 
-  tasks.forEach((task) => {
-    const item = createItem(
-      task.title,
-      `${formatDate(task.date)} • ${
-        task.priority === "high" ? "أولوية مهمة" :
-        task.priority === "low" ? "أولوية منخفضة" : "أولوية عادية"
-      }`
-    );
+  container.innerHTML = tasks.map((task) => `
+    <div class="task-item ${task.completed ? "completed" : ""}">
+      <div class="task-title">${escapeHTML(task.title)}</div>
+      <div class="task-meta">
+        ${task.date ? escapeHTML(formatDate(task.date)) : ""}
+        <span class="priority-badge priority-${escapeHTML(task.priority)}">
+          ${task.priority === "high" ? "عالية" :
+            task.priority === "low" ? "منخفضة" : "متوسطة"}
+        </span>
+      </div>
+      <div class="task-actions">
+        <button data-task-toggle="${escapeHTML(task.id)}">
+          ${task.completed ? "إلغاء الإنجاز" : "إنجاز"}
+        </button>
+        <button data-task-delete="${escapeHTML(task.id)}">حذف</button>
+      </div>
+    </div>
+  `).join("");
 
-    item.style.borderRight = `4px solid ${task.color}`;
+  container.querySelectorAll("[data-task-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const task = state.tasks.find(
+        (item) => item.id === button.dataset.taskToggle
+      );
+      if (!task) return;
 
-    if (task.done) item.classList.add("is-complete");
-
-    const actions = document.createElement("div");
-    actions.className = "row-actions";
-
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "secondary-button";
-    toggle.textContent = task.done ? "إلغاء الإنجاز" : "إتمام";
-    toggle.addEventListener("click", () => {
-      task.done = !task.done;
+      task.completed = !task.completed;
       saveState();
-      renderAll();
+      renderTasks();
+      renderHome();
     });
+  });
 
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "text-button";
-    remove.textContent = "حذف";
-    remove.addEventListener("click", () => {
-      state.tasks = state.tasks.filter((entry) => entry.id !== task.id);
+  container.querySelectorAll("[data-task-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.tasks = state.tasks.filter(
+        (task) => task.id !== button.dataset.taskDelete
+      );
       saveState();
-      renderAll();
-      showToast("تم حذف المهمة.");
+      renderTasks();
+      renderHome();
+      showToast("تم حذف المهمة");
     });
-
-    actions.append(toggle, remove);
-    item.appendChild(actions);
-    list.appendChild(item);
   });
 }
 
-function renderWater() {
-  const total = getTodayWaterTotal();
-  const goal = Number(state.waterGoal) || 0;
-  const percentage = goal > 0
-    ? Math.min(100, Math.round((total / goal) * 100))
-    : 0;
+/* الماء */
 
-  setText("water-total-display", formatNumber(total));
-  setText(
-    "water-progress-label",
-    goal > 0
-      ? `${formatNumber(percentage)}٪ من الهدف الاختياري`
-      : "لم تحدد هدفاً يومياً. يمكنك المتابعة دون هدف."
-  );
-
-  if ($("water-progress-fill")) {
-    $("water-progress-fill").style.width = `${percentage}%`;
+function resetWaterIfNewDay() {
+  if (state.water.date !== today()) {
+    state.water.date = today();
+    state.water.count = 0;
+    state.water.log = [];
+    saveState();
   }
-
-  if ($("water-serving-input")) {
-    $("water-serving-input").value = state.waterServing || 250;
-  }
-
-  if ($("water-optional-goal-input")) {
-    $("water-optional-goal-input").value = goal || "";
-  }
-
-  const list = $("water-history-list");
-  list.replaceChildren();
-
-  const entries = getTodayWaterEntries();
-
-  if (!entries.length) {
-    list.innerHTML = '<div class="empty-state">لم تسجل أي كمية اليوم.</div>';
-    return;
-  }
-
-  [...entries].reverse().forEach((entry) => {
-    const time = new Date(entry.time).toLocaleTimeString("ar", {
-      hour: "2-digit",
-      minute: "2-digit"
-    });
-
-    list.appendChild(
-      createItem(
-        `${formatNumber(entry.amount)} مل`,
-        `وقت التسجيل: ${time}`,
-        [{
-          label: "حذف",
-          className: "text-button",
-          onClick: () => {
-            state.waterLog[localDateKey()] =
-              getTodayWaterEntries().filter((item) => item.id !== entry.id);
-            saveState();
-            renderAll();
-          }
-        }]
-      )
-    );
-  });
 }
 
-function renderStudy() {
-  setText("study-today-total", `${formatNumber(getTodayStudyMinutes())} دقيقة`);
+function bindWater() {
+  $("add-water-btn")?.addEventListener("click", () => {
+    const amount = Number($("water-amount-input")?.value);
 
-  const list = $("study-sessions-list");
-  list.replaceChildren();
-
-  const sessions = state.studySessions
-    .filter((session) => session.date === localDateKey())
-    .slice()
-    .reverse();
-
-  if (!sessions.length) {
-    list.innerHTML = '<div class="empty-state">ستظهر جلساتك هنا بعد إكمالها.</div>';
-    return;
-  }
-
-  sessions.forEach((session) => {
-    list.appendChild(
-      createItem(
-        `${formatNumber(session.minutes)} دقيقة`,
-        session.time || "جلسة دراسة"
-      )
-    );
-  });
-}
-
-function renderFinance() {
-  const income = state.finance
-    .filter((entry) => entry.type === "income")
-    .reduce((sum, entry) => sum + entry.amount, 0);
-
-  const expenses = state.finance
-    .filter((entry) => entry.type === "expense")
-    .reduce((sum, entry) => sum + entry.amount, 0);
-
-  setText("finance-income-total", formatMoney(income));
-  setText("finance-expense-total", formatMoney(expenses));
-  setText("finance-balance-total", formatMoney(income - expenses));
-
-  const list = $("finance-list");
-  list.replaceChildren();
-
-  if (!state.finance.length) {
-    list.innerHTML = '<div class="empty-state">لا توجد عمليات مسجلة.</div>';
-    return;
-  }
-
-  [...state.finance].reverse().forEach((entry) => {
-    const sign = entry.type === "income" ? "+" : "−";
-    const item = createItem(
-      entry.title,
-      `${entry.category} • ${formatDate(entry.date)} • ${sign}${formatMoney(entry.amount)}`,
-      [{
-        label: "حذف",
-        className: "text-button",
-        onClick: () => {
-          state.finance = state.finance.filter((x) => x.id !== entry.id);
-          saveState();
-          renderAll();
-        }
-      }]
-    );
-
-    list.appendChild(item);
-  });
-}
-
-function renderJournal() {
-  const list = $("journal-list");
-  list.replaceChildren();
-
-  if (!state.journal.length) {
-    list.innerHTML = '<div class="empty-state">لم تحفظ أي ذكرى بعد.</div>';
-    return;
-  }
-
-  [...state.journal].reverse().forEach((entry) => {
-    const item = createItem(
-      entry.title,
-      `${formatDate(entry.date)}${entry.mood ? ` • ${entry.mood}` : ""}`
-    );
-
-    if (entry.content) {
-      const content = document.createElement("p");
-      content.className = "journal-content";
-      content.textContent = entry.content;
-      item.appendChild(content);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast("أدخل كمية صحيحة");
+      return;
     }
 
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "text-button";
-    remove.textContent = "حذف الذكرى";
-    remove.addEventListener("click", () => {
-      state.journal = state.journal.filter((x) => x.id !== entry.id);
-      saveState();
-      renderAll();
-    });
-
-    item.appendChild(remove);
-    list.appendChild(item);
-  });
-}
-
-function renderCompanion() {
-  setText("companion-name-display", state.companion.name);
-  setText("companion-happiness", formatNumber(state.companion.happiness));
-  setText("companion-energy", formatNumber(state.companion.energy));
-  setText("companion-name-input", state.companion.name);
-
-  if ($("companion-name-input")) {
-    $("companion-name-input").value = state.companion.name;
-  }
-
-  setText(
-    "companion-status",
-    state.companion.energy < 20
-      ? "رفيقك يحتاج إلى الراحة."
-      : state.companion.happiness < 25
-        ? "رفيقك يحتاج إلى بعض الاهتمام."
-        : "رفيقك بخير، استمر بالاهتمام به."
-  );
-}
-
-function renderCapsules() {
-  const list = $("capsules-list");
-  list.replaceChildren();
-
-  if (!state.capsules.length) {
-    list.innerHTML = '<div class="empty-state">لا توجد كبسولات محفوظة.</div>';
-    return;
-  }
-
-  [...state.capsules].reverse().forEach((capsule) => {
-    const unlocked = capsule.date <= localDateKey();
-    const item = createItem(
-      capsule.title,
-      unlocked
-        ? `متاحة للفتح • ${formatDate(capsule.date)}`
-        : `ستُفتح في ${formatDate(capsule.date)}`
-    );
-
-    if (unlocked) {
-      const open = document.createElement("button");
-      open.type = "button";
-      open.className = "secondary-button";
-      open.textContent = "فتح الرسالة";
-      open.addEventListener("click", () => {
-        showModal(capsule.title, capsule.message || "رسالة فارغة.");
-      });
-      item.appendChild(open);
-    }
-
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "text-button";
-    remove.textContent = "حذف";
-    remove.addEventListener("click", () => {
-      state.capsules = state.capsules.filter((x) => x.id !== capsule.id);
-      saveState();
-      renderAll();
-    });
-
-    item.appendChild(remove);
-    list.appendChild(item);
-  });
-}
-
-function renderProfile() {
-  const profile = state.profile;
-
-  if ($("profile-name-input")) $("profile-name-input").value = profile.name || "";
-  if ($("profile-birth-input")) $("profile-birth-input").value = profile.dob || "";
-  if ($("profile-height-input")) $("profile-height-input").value = profile.height || "";
-  if ($("profile-weight-input")) $("profile-weight-input").value = profile.weight || "";
-
-  const age = calculateAge(profile.dob);
-  setText(
-    "profile-age-display",
-    age ? `${age.years} سنة` : "غير محدد"
-  );
-}
-
-function renderSettings() {
-  const settings = state.settings;
-
-  if ($("theme-select")) $("theme-select").value = settings.theme;
-  if ($("background-color-input")) $("background-color-input").value = settings.backgroundColor;
-  if ($("card-color-input")) $("card-color-input").value = settings.cardColor;
-  if ($("text-color-input")) $("text-color-input").value = settings.textColor;
-  if ($("accent-color-input")) $("accent-color-input").value = settings.accent;
-  if ($("highlight-color-input")) $("highlight-color-input").value = settings.highlight;
-  if ($("reminders-enabled-input")) $("reminders-enabled-input").checked = settings.remindersEnabled;
-  if ($("reminder-interval-input")) $("reminder-interval-input").value = settings.reminderInterval;
-}
-
-function renderAll() {
-  applyAppearance();
-  renderHome();
-  renderTasks();
-  renderWater();
-  renderStudy();
-  renderFinance();
-  renderJournal();
-  renderCompanion();
-  renderCapsules();
-  renderProfile();
-  renderSettings();
-      }
-/* الأحداث والتفاعلات */
-
-function addWater(amount) {
-  const value = Number(amount);
-
-  if (!Number.isFinite(value) || value <= 0 || value > 5000) {
-    showToast("أدخل كمية صحيحة.");
-    return;
-  }
-
-  const key = localDateKey();
-
-  if (!Array.isArray(state.waterLog[key])) {
-    state.waterLog[key] = [];
-  }
-
-  state.waterLog[key].push({
-    id: makeId(),
-    amount: Math.round(value),
-    time: new Date().toISOString()
-  });
-
-  saveState();
-  renderAll();
-  showToast("تم تسجيل كمية الماء.");
-}
-
-function startStudyTimer() {
-  if (studyTimer) return;
-
-  const minutes = Number($("study-minutes-input").value);
-
-  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 240) {
-    showToast("اختر مدة بين دقيقة و240 دقيقة.");
-    return;
-  }
-
-  studyDuration = Math.round(minutes);
-  studyEndTime = Date.now() + studyDuration * 60 * 1000;
-
-  $("study-start-btn").disabled = true;
-  $("study-pause-btn").disabled = false;
-  $("study-minutes-input").disabled = true;
-
-  setText("study-timer-status", "جلسة الدراسة جارية.");
-
-  studyTimer = setInterval(updateStudyTimer, 500);
-  updateStudyTimer();
-}
-
-function updateStudyTimer() {
-  const remaining = Math.max(0, Math.ceil((studyEndTime - Date.now()) / 1000));
-  const minutes = String(Math.floor(remaining / 60)).padStart(2, "0");
-  const seconds = String(remaining % 60).padStart(2, "0");
-
-  setText("study-timer-display", `${minutes}:${seconds}`);
-
-  if (remaining <= 0) {
-    finishStudyTimer();
-  }
-}
-
-function pauseStudyTimer() {
-  if (!studyTimer) return;
-
-  const remaining = Math.max(0, Math.ceil((studyEndTime - Date.now()) / 1000));
-  const elapsed = Math.max(0, studyDuration * 60 - remaining);
-
-  clearInterval(studyTimer);
-  studyTimer = null;
-
-  if (elapsed >= 60) {
-    state.studySessions.push({
+    state.water.count += amount;
+    state.water.log.unshift({
       id: makeId(),
-      date: localDateKey(),
-      minutes: Math.floor(elapsed / 60),
+      amount,
       time: new Date().toLocaleTimeString("ar", {
         hour: "2-digit",
         minute: "2-digit"
       })
     });
+
     saveState();
-  }
-
-  resetStudyDisplay();
-  renderAll();
-  showToast("تم إيقاف الجلسة وتسجيل وقتها.");
-}
-
-function finishStudyTimer() {
-  if (studyTimer) {
-    clearInterval(studyTimer);
-    studyTimer = null;
-  }
-
-  state.studySessions.push({
-    id: makeId(),
-    date: localDateKey(),
-    minutes: studyDuration,
-    time: new Date().toLocaleTimeString("ar", {
-      hour: "2-digit",
-      minute: "2-digit"
-    })
+    renderWater();
+    renderHome();
+    showToast("تمت إضافة الماء 💧");
   });
 
-  saveState();
-  resetStudyDisplay();
-  renderAll();
-  showModal("أحسنت!", "انتهت جلسة الدراسة. خذ استراحة قصيرة إذا احتجت.");
+  $("water-goal-input")?.addEventListener("change", () => {
+    const goal = Number($("water-goal-input").value);
+    if (goal > 0) {
+      state.water.goal = goal;
+      saveState();
+    }
+  });
+
+  $("reset-water-btn")?.addEventListener("click", () => {
+    state.water.count = 0;
+    state.water.log = [];
+    saveState();
+    renderWater();
+    renderHome();
+    showToast("تمت إعادة ضبط سجل الماء");
+  });
 }
 
-function resetStudyDisplay() {
-  const minutes = Number($("study-minutes-input").value) || 25;
+function renderWater() {
+  resetWaterIfNewDay();
 
-  setText(
-    "study-timer-display",
-    `${String(minutes).padStart(2, "0")}:00`
-  );
+  if ($("water-current-count")) {
+    $("water-current-count").textContent = state.water.count;
+  }
 
-  setText("study-timer-status", "المؤقت متوقف.");
+  if ($("water-goal-input")) {
+    $("water-goal-input").value = state.water.goal;
+  }
 
-  $("study-start-btn").disabled = false;
-  $("study-pause-btn").disabled = true;
-  $("study-minutes-input").disabled = false;
-}
+  const container = $("water-log-list");
+  if (!container) return;
 
-function saveProfile(event) {
-  event.preventDefault();
-
-  const dob = $("profile-birth-input").value;
-
-  if (dob && !calculateAge(dob)) {
-    showToast("تحقق من تاريخ الميلاد.");
+  if (!state.water.log.length) {
+    showEmpty(container, "لم تسجل شرب الماء اليوم.");
     return;
   }
 
-  state.profile = {
-    name: $("profile-name-input").value.trim(),
-    dob,
-    height: $("profile-height-input").value
-      ? Number($("profile-height-input").value) : "",
-    weight: $("profile-weight-input").value
-      ? Number($("profile-weight-input").value) : "",
-    completed: true
+  container.innerHTML = state.water.log.map((item) => `
+    <div class="water-log-item">
+      <strong>${escapeHTML(item.amount)} مل</strong>
+      <span>${escapeHTML(item.time || "")}</span>
+    </div>
+  `).join("");
+}
+
+/* مؤقت الدراسة */
+
+function loadTimer() {
+  try {
+    return JSON.parse(localStorage.getItem(TIMER_KEY)) || {
+      active: false,
+      paused: false,
+      endAt: 0,
+      remaining: 0,
+      total: 1500,
+      sessionLogged: false
+    };
+  } catch {
+    return {
+      active: false,
+      paused: false,
+      endAt: 0,
+      remaining: 0,
+      total: 1500,
+      sessionLogged: false
+    };
+  }
+}
+
+function saveTimer() {
+  try {
+    localStorage.setItem(TIMER_KEY, JSON.stringify(studyTimer));
+  } catch (error) {
+    console.error("تعذر حفظ المؤقت:", error);
+  }
+}
+
+function timerRemaining() {
+  if (studyTimer.active && !studyTimer.paused) {
+    return Math.max(0, Math.ceil((studyTimer.endAt - Date.now()) / 1000));
+  }
+
+  return Math.max(0, studyTimer.remaining);
+}
+
+function renderTimer() {
+  const seconds = timerRemaining();
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+
+  if ($("study-timer-display")) {
+    $("study-timer-display").textContent =
+      `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+  }
+}
+
+function startStudyTimer() {
+  if (studyTimer.active && !studyTimer.paused) return;
+
+  if (!studyTimer.remaining || studyTimer.remaining <= 0) {
+    const minutes = Number($("study-minutes-input")?.value || 25);
+
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      showToast("أدخل مدة صحيحة");
+      return;
+    }
+
+    studyTimer.total = Math.round(minutes * 60);
+    studyTimer.remaining = studyTimer.total;
+    studyTimer.sessionLogged = false;
+  }
+
+  studyTimer.active = true;
+  studyTimer.paused = false;
+  studyTimer.endAt = Date.now() + studyTimer.remaining * 1000;
+
+  saveTimer();
+  clearInterval(studyInterval);
+
+  studyInterval = setInterval(tickStudyTimer, 250);
+  renderTimer();
+}
+
+function pauseStudyTimer() {
+  if (!studyTimer.active || studyTimer.paused) return;
+
+  studyTimer.remaining = timerRemaining();
+  studyTimer.active = false;
+  studyTimer.paused = true;
+
+  clearInterval(studyInterval);
+  saveTimer();
+  renderTimer();
+  showToast("تم إيقاف الجلسة مؤقتاً");
+}
+
+function tickStudyTimer() {
+  const remaining = timerRemaining();
+
+  if (remaining <= 0) {
+    finishStudyTimer();
+    return;
+  }
+
+  renderTimer();
+}
+
+function finishStudyTimer() {
+  clearInterval(studyInterval);
+
+  if (!studyTimer.sessionLogged) {
+    state.study.sessions.unshift({
+      id: makeId(),
+      minutes: Math.round(studyTimer.total / 60),
+      date: today(),
+      time: new Date().toLocaleTimeString("ar", {
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    });
+
+    studyTimer.sessionLogged = true;
+    saveState();
+  }
+
+  studyTimer.active = false;
+  studyTimer.paused = false;
+  studyTimer.remaining = 0;
+  studyTimer.endAt = 0;
+
+  saveTimer();
+  renderStudy();
+  renderHome();
+  showToast("انتهت جلسة التركيز! 🎉");
+}
+
+function resetStudyTimer() {
+  clearInterval(studyInterval);
+
+  studyTimer = {
+    active: false,
+    paused: false,
+    endAt: 0,
+    remaining: 0,
+    total: 1500,
+    sessionLogged: false
   };
 
-  saveState();
-  renderAll();
-  showToast("تم حفظ الملف الشخصي.");
+  saveTimer();
+  renderTimer();
 }
 
-function saveAppearance() {
-  state.settings.theme = $("theme-select").value;
-  state.settings.backgroundColor = $("background-color-input").value;
-  state.settings.cardColor = $("card-color-input").value;
-  state.settings.textColor = $("text-color-input").value;
-  state.settings.accent = $("accent-color-input").value;
-  state.settings.highlight = $("highlight-color-input").value;
-
-  saveState();
-  renderAll();
-  showToast("تم حفظ المظهر.");
+function bindStudy() {
+  $("start-study-btn")?.addEventListener("click", startStudyTimer);
+  $("pause-study-btn")?.addEventListener("click", pauseStudyTimer);
+  $("reset-study-btn")?.addEventListener("click", resetStudyTimer);
 }
+
+function renderStudy() {
+  renderTimer();
+
+  const container = $("study-sessions-list");
+  if (!container) return;
+
+  if (!state.study.sessions.length) {
+    showEmpty(container, "ستظهر جلساتك هنا بعد إكمالها.");
+    return;
+  }
+
+  container.innerHTML = state.study.sessions.map((session) => `
+    <div class="study-session-item">
+      <strong>${escapeHTML(session.minutes)} دقيقة</strong>
+      <p>${escapeHTML(formatDate(session.date))} ${escapeHTML(session.time || "")}</p>
+    </div>
+  `).join("");
+}
+
+/* المصروفات */
+
+function bindFinance() {
+  $("finance-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const title = $("finance-title-input")?.value.trim();
+    const amount = Number($("finance-amount-input")?.value);
+    const type = $("finance-type-input")?.value || "expense";
+
+    if (!title || !Number.isFinite(amount) || amount <= 0) {
+      showToast("تأكد من البيانات");
+      return;
+    }
+
+    state.finance.unshift({
+      id: makeId(),
+      title,
+      amount,
+      type,
+      date: today()
+    });
+
+    saveState();
+    event.target.reset();
+    renderFinance();
+    showToast("تم تسجيل العملية");
+  });
+}
+
+function renderFinance() {
+  const container = $("finance-list");
+  if (!container) return;
+
+  if (!state.finance.length) {
+    showEmpty(container, "لا توجد عمليات مالية.");
+    return;
+  }
+
+  container.innerHTML = state.finance.map((item) => `
+    <div class="finance-item">
+      <strong>${escapeHTML(item.title)}</strong>
+      <p>
+        ${item.type === "income" ? "دخل" : "مصروف"}:
+        ${escapeHTML(item.amount)}
+      </p>
+      <small>${escapeHTML(formatDate(item.date))}</small>
+      <button data-finance-delete="${escapeHTML(item.id)}">حذف</button>
+    </div>
+  `).join("");
+
+  container.querySelectorAll("[data-finance-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.finance = state.finance.filter(
+        (item) => item.id !== button.dataset.financeDelete
+      );
+      saveState();
+      renderFinance();
+    });
+  });
+}
+
+/* اليوميات */
+
+function bindJournal() {
+  $("journal-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const title = $("journal-title-input")?.value.trim() || "يومياتي";
+    const content = $("journal-content-input")?.value.trim();
+
+    if (!content) {
+      showToast("اكتب شيئاً قبل الحفظ");
+      return;
+    }
+
+    state.journal.unshift({
+      id: makeId(),
+      title,
+      content,
+      date: today(),
+      createdAt: Date.now()
+    });
+
+    saveState();
+    event.target.reset();
+    renderJournal();
+    showToast("تم حفظ يومياتك");
+  });
+}
+
+function renderJournal() {
+  const container = $("journal-list");
+  if (!container) return;
+
+  if (!state.journal.length) {
+    showEmpty(container, "لم تكتب يوميات بعد.");
+    return;
+  }
+
+  container.innerHTML = state.journal.map((entry) => `
+    <div class="journal-item">
+      <strong>${escapeHTML(entry.title)}</strong>
+      <small>${escapeHTML(formatDate(entry.date))}</small>
+      <p>${escapeHTML(entry.content)}</p>
+      <button data-journal-delete="${escapeHTML(entry.id)}">حذف</button>
+    </div>
+  `).join("");
+
+  container.querySelectorAll("[data-journal-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.journal = state.journal.filter(
+        (entry) => entry.id !== button.dataset.journalDelete
+      );
+      saveState();
+      renderJournal();
+    });
+  });
+}
+
+/* تسجيل الصوت */
+
+function bindVoiceRecorder() {
+  const startButton = $("voice-record-btn");
+  const stopButton = $("voice-stop-btn");
+  const status = $("voice-record-status");
+
+  if (!startButton || !stopButton) return;
+
+  startButton.addEventListener("click", async () => {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      if (status) {
+        status.textContent = "هذا المتصفح لا يدعم التسجيل الصوتي.";
+      }
+      showToast("التسجيل غير مدعوم في هذا المتصفح");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true
+      });
+
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) {
+          recordedChunks.push(event.data);
+        }
+      });
+
+      mediaRecorder.addEventListener("stop", () => {
+        const blob = new Blob(recordedChunks, {
+          type: mediaRecorder.mimeType || "audio/webm"
+        });
+
+        const url = URL.createObjectURL(blob);
+
+        voiceRecordings.unshift({
+          id: makeId(),
+          url,
+          blob,
+          date: new Date().toLocaleString("ar")
+        });
+
+        renderVoiceRecordings();
+
+        stream.getTracks().forEach((track) => track.stop());
+
+        if (status) status.textContent = "تم إيقاف التسجيل.";
+      });
+
+      mediaRecorder.start();
+
+      startButton.disabled = true;
+      stopButton.disabled = false;
+
+      if (status) status.textContent = "جاري التسجيل...";
+    } catch (error) {
+      console.error(error);
+      if (status) status.textContent = "لم يتم السماح باستخدام الميكروفون.";
+      showToast("تحقق من إذن الميكروفون");
+    }
+  });
+
+  stopButton.addEventListener("click", () => {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      startButton.disabled = false;
+      stopButton.disabled = true;
+    }
+  });
+}
+
+function renderVoiceRecordings() {
+  const container = $("voice-recordings-list");
+  if (!container) return;
+
+  if (!voiceRecordings.length) {
+    showEmpty(container, "لا توجد تسجيلات في هذه الجلسة.");
+    return;
+  }
+
+  container.innerHTML = voiceRecordings.map((recording) => `
+    <div class="list-item">
+      <p>${escapeHTML(recording.date)}</p>
+      <audio controls src="${recording.url}"></audio>
+      <button data-voice-download="${escapeHTML(recording.id)}">حفظ التسجيل</button>
+    </div>
+  `).join("");
+
+  container.querySelectorAll("[data-voice-download]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const recording = voiceRecordings.find(
+        (item) => item.id === button.dataset.voiceDownload
+      );
+
+      if (!recording) return;
+
+      const link = document.createElement("a");
+      link.href = recording.url;
+      link.download = `athar-recording-${recording.id}.webm`;
+      link.click();
+    });
+  });
+}
+
+/* كبسولة الزمن */
+
+function bindCapsules() {
+  $("capsule-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const title = $("capsule-title-input")?.value.trim();
+    const content = $("capsule-content-input")?.value.trim();
+    const date = $("capsule-date-input")?.value;
+
+    if (!title || !content || !date) {
+      showToast("أكمل بيانات الكبسولة");
+      return;
+    }
+
+    state.capsules.unshift({
+      id: makeId(),
+      title,
+      content,
+      date,
+      createdAt: Date.now()
+    });
+
+    saveState();
+    event.target.reset();
+    renderCapsules();
+    showToast("تم حفظ كبسولة الزمن");
+  });
+}
+
+function renderCapsules() {
+  const container = $("capsules-list");
+  if (!container) return;
+
+  if (!state.capsules.length) {
+    showEmpty(container, "لم تنشئ كبسولات بعد.");
+    return;
+  }
+
+  container.innerHTML = state.capsules.map((capsule) => {
+    const unlocked = capsule.date <= today();
+
+    return `
+      <div class="capsule-item">
+        <strong>${escapeHTML(capsule.title)}</strong>
+        <p>موعد الفتح: ${escapeHTML(formatDate(capsule.date))}</p>
+        ${unlocked
+          ? `<p>${escapeHTML(capsule.content)}</p>`
+          : "<p>🔒 لم يحن موعد فتح هذه الكبسولة بعد.</p>"}
+        <button data-capsule-delete="${escapeHTML(capsule.id)}">حذف</button>
+      </div>
+    `;
+  }).join("");
+
+  container.querySelectorAll("[data-capsule-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.capsules = state.capsules.filter(
+        (item) => item.id !== button.dataset.capsuleDelete
+      );
+      saveState();
+      renderCapsules();
+    });
+  });
+}
+
+/* الملف الشخصي */
+
+function bindProfile() {
+  $("profile-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    state.profile.name = $("profile-name-input")?.value.trim() || "";
+    state.profile.age = $("profile-age-input")?.value || "";
+
+    saveState();
+    renderHome();
+    showToast("تم حفظ الملف الشخصي");
+  });
+}
+
+function renderProfile() {
+  if ($("profile-name-input")) {
+    $("profile-name-input").value = state.profile.name || "";
+  }
+
+  if ($("profile-age-input")) {
+    $("profile-age-input").value = state.profile.age || "";
+  }
+}
+
+/* الإعدادات والمظهر */
+
+function applyAppearance() {
+  const app = $("app");
+  if (!app) return;
+
+  app.classList.toggle("theme-light", state.settings.theme === "light");
+
+  if (state.settings.theme === "system") {
+    app.classList.toggle(
+      "theme-light",
+      window.matchMedia("(prefers-color-scheme: light)").matches
+    );
+  }
+
+  document.documentElement.style.setProperty(
+    "--accent",
+    state.settings.accentColor || "#38bdf8"
+  );
+
+  if (state.settings.backgroundImage) {
+    document.documentElement.style.setProperty(
+      "--app-background-image",
+      `url("${state.settings.backgroundImage}")`
+    );
+  } else {
+    document.documentElement.style.setProperty(
+      "--app-background-image",
+      "none"
+    );
+  }
+
+  if ($("theme-select")) {
+    $("theme-select").value = state.settings.theme;
+  }
+
+  if ($("accent-color-input")) {
+    $("accent-color-input").value = state.settings.accentColor;
+  }
+}
+
+function bindSettings() {
+  $("theme-select")?.addEventListener("change", (event) => {
+    state.settings.theme = event.target.value;
+    saveState();
+    applyAppearance();
+  });
+
+  $("accent-color-input")?.addEventListener("change", (event) => {
+    state.settings.accentColor = event.target.value;
+    saveState();
+    applyAppearance();
+  });
+
+  $("background-image-input")?.addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("اختر صورة");
+      return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+      showToast("الصورة كبيرة. اختر صورة أقل من 3 ميغابايت.");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const image = new Image();
+
+      image.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxSize = 1200;
+        const scale = Math.min(
+          1,
+          maxSize / Math.max(image.width, image.height)
+        );
+
+        canvas.width = Math.round(image.width * scale);
+        canvas.height = Math.round(image.height * scale);
+
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        state.settings.backgroundImage =
+          canvas.toDataURL("image/jpeg", 0.72);
+
+        if (saveState()) {
+          applyAppearance();
+          showToast("تم تغيير الخلفية");
+        }
+      };
+
+      image.src = reader.result;
+    };
+
+    reader.readAsDataURL(file);
+  });
+
+  $("remove-background-btn")?.addEventListener("click", () => {
+    state.settings.backgroundImage = "";
+    saveState();
+    applyAppearance();
+    showToast("تمت إزالة الخلفية");
+  });
+
+  $("save-reminders-btn")?.addEventListener("click", () => {
+    state.settings.remindersEnabled =
+      Boolean($("reminders-enabled-input")?.checked);
+
+    state.settings.reminderInterval =
+      Math.max(1, Number($("reminder-interval-input")?.value || 60));
+
+    saveState();
+    setupInAppReminders();
+
+    showToast("تم حفظ إعدادات التذكير داخل التطبيق");
+  });
+
+  $("save-app-pin-btn")?.addEventListener("click", () => {
+    showToast("قفل التطبيق الحقيقي يحتاج إلى تطوير Android أصلي.");
+  });
+
+  $("remove-app-pin-btn")?.addEventListener("click", () => {
+    showToast("لا يوجد قفل Android أصلي مفعّل في هذه النسخة.");
+  });
+
+  $("export-backup-btn")?.addEventListener("click", exportBackup);
+
+  $("import-backup-input")?.addEventListener("change", importBackup);
+}
+
+function renderSettings() {
+  if ($("reminders-enabled-input")) {
+    $("reminders-enabled-input").checked =
+      Boolean(state.settings.remindersEnabled);
+  }
+
+  if ($("reminder-interval-input")) {
+    $("reminder-interval-input").value =
+      state.settings.reminderInterval || 60;
+  }
+}
+
+/* تذكيرات داخل التطبيق فقط */
+
+function setupInAppReminders() {
+  clearInterval(reminderInterval);
+
+  if (!state.settings.remindersEnabled) return;
+
+  const minutes = Math.max(
+    1,
+    Number(state.settings.reminderInterval || 60)
+  );
+
+  reminderInterval = setInterval(() => {
+    if (document.visibilityState === "visible") {
+      showToast("تذكير لطيف: خذ استراحة قصيرة أو اشرب ماء 💧");
+    }
+  }, minutes * 60 * 1000);
+}
+
+/* النسخ الاحتياطي */
 
 function exportBackup() {
   const backup = {
@@ -885,470 +1096,108 @@ function exportBackup() {
 
   const blob = new Blob(
     [JSON.stringify(backup, null, 2)],
-    { type: "application/json;charset=utf-8" }
+    { type: "application/json" }
   );
 
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
   link.href = url;
-  link.download = `athar-yawmi-backup-${localDateKey()}.json`;
+  link.download = `athar-daily-backup-${today()}.json`;
   document.body.appendChild(link);
   link.click();
   link.remove();
 
-  URL.revokeObjectURL(url);
-  showToast("تم تجهيز النسخة الاحتياطية.");
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  showToast("تم تجهيز النسخة الاحتياطية");
 }
 
-function validateImportedState(imported) {
-  if (!imported || typeof imported !== "object" || Array.isArray(imported)) {
-    throw new Error("الملف غير صالح.");
-  }
-
-  const candidate = imported.data || imported;
-
-  if (typeof candidate !== "object" || Array.isArray(candidate)) {
-    throw new Error("بنية النسخة الاحتياطية غير صحيحة.");
-  }
-
-  const base = createDefaultState();
-
-  return {
-    ...base,
-    ...candidate,
-    profile: {
-      ...base.profile,
-      ...(candidate.profile || {})
-    },
-    settings: {
-      ...base.settings,
-      ...(candidate.settings || {})
-    },
-    companion: {
-      ...base.companion,
-      ...(candidate.companion || {})
-    },
-    tasks: Array.isArray(candidate.tasks) ? candidate.tasks : [],
-    finance: Array.isArray(candidate.finance) ? candidate.finance : [],
-    journal: Array.isArray(candidate.journal) ? candidate.journal : [],
-    capsules: Array.isArray(candidate.capsules) ? candidate.capsules : [],
-    studySessions: Array.isArray(candidate.studySessions)
-      ? candidate.studySessions : [],
-    waterLog: candidate.waterLog && typeof candidate.waterLog === "object"
-      ? candidate.waterLog : {},
-    dailyNotes: candidate.dailyNotes && typeof candidate.dailyNotes === "object"
-      ? candidate.dailyNotes : {}
-  };
-}
-
-async function importBackup(file) {
+function importBackup(event) {
+  const file = event.target.files?.[0];
   if (!file) return;
-
-  try {
-    const text = await file.text();
-    const imported = JSON.parse(text);
-    const confirmed = confirm(
-      "سيتم استبدال البيانات الحالية بالبيانات الموجودة في النسخة الاحتياطية. هل تريد المتابعة؟"
-    );
-
-    if (!confirmed) return;
-
-    state = validateImportedState(imported);
-    saveState();
-    renderAll();
-    showToast("تم استيراد النسخة الاحتياطية.");
-  } catch (error) {
-    console.error(error);
-    showToast("تعذر استيراد الملف. تأكد أنه نسخة احتياطية صحيحة.");
-  } finally {
-    $("import-backup-input").value = "";
-  }
-}
-
-function saveDailyNote() {
-  state.dailyNotes[localDateKey()] = $("daily-note-input").value.trim();
-  saveState();
-  setText("daily-note-status", "تم حفظ ملاحظة اليوم.");
-  showToast("تم حفظ ملاحظتك.");
-}
-
-function saveFinanceEntry(event) {
-  event.preventDefault();
-
-  const title = $("finance-title-input").value.trim();
-  const amount = Number($("finance-amount-input").value);
-
-  if (!title || !Number.isFinite(amount) || amount <= 0) {
-    showToast("أدخل وصفاً ومبلغاً صحيحاً.");
-    return;
-  }
-
-  state.finance.push({
-    id: makeId(),
-    title,
-    amount,
-    type: $("finance-type-input").value,
-    category: $("finance-category-input").value,
-    date: localDateKey()
-  });
-
-  $("finance-form").reset();
-  saveState();
-  renderAll();
-  showToast("تم تسجيل العملية.");
-}
-
-function saveJournalEntry(event) {
-  event.preventDefault();
-
-  const title = $("journal-title-input").value.trim();
-
-  if (!title) {
-    showToast("اكتب عنوان الذكرى أولاً.");
-    return;
-  }
-
-  state.journal.push({
-    id: makeId(),
-    title,
-    content: $("journal-content-input").value.trim(),
-    mood: $("journal-mood-input").value,
-    date: localDateKey()
-  });
-
-  $("journal-form").reset();
-  saveState();
-  renderAll();
-  showToast("تم حفظ الذكرى.");
-}
-
-function saveCapsule(event) {
-  event.preventDefault();
-
-  const title = $("capsule-title-input").value.trim();
-  const message = $("capsule-message-input").value.trim();
-  const date = $("capsule-date-input").value;
-
-  if (!title || !date) {
-    showToast("أدخل عنوان الرسالة وتاريخ فتحها.");
-    return;
-  }
-
-  if (date < localDateKey()) {
-    showToast("اختر تاريخ اليوم أو تاريخاً مستقبلياً.");
-    return;
-  }
-
-  state.capsules.push({
-    id: makeId(),
-    title,
-    message,
-    date,
-    createdAt: new Date().toISOString()
-  });
-
-  $("capsule-form").reset();
-  saveState();
-  renderAll();
-  showToast("تم حفظ كبسولة الزمن.");
-}
-
-function saveCompanionName(event) {
-  event.preventDefault();
-
-  const name = $("companion-name-input").value.trim();
-
-  if (!name) {
-    showToast("اكتب اسماً لرفيقك.");
-    return;
-  }
-
-  state.companion.name = name;
-  saveState();
-  renderAll();
-  showToast("تم تغيير اسم رفيقك.");
-}
-
-function interactWithCompanion(action) {
-  if (action === "play") {
-    if (state.companion.energy < 10) {
-      showToast("رفيقك يحتاج إلى الراحة قبل اللعب.");
-      return;
-    }
-
-    state.companion.energy = Math.max(0, state.companion.energy - 10);
-    state.companion.happiness = Math.min(100, state.companion.happiness + 15);
-    showToast("قضيت وقتاً ممتعاً مع رفيقك!");
-  } else {
-    state.companion.energy = Math.min(100, state.companion.energy + 15);
-    state.companion.happiness = Math.min(100, state.companion.happiness + 5);
-    showToast("اعتنيت برفيقك.");
-  }
-
-  saveState();
-  renderCompanion();
-}
-
-function saveReminderSettings() {
-  const interval = Number($("reminder-interval-input").value);
-
-  if (!Number.isFinite(interval) || interval < 15 || interval > 360) {
-    showToast("الفاصل يجب أن يكون بين 15 و360 دقيقة.");
-    return;
-  }
-
-  state.settings.remindersEnabled = $("reminders-enabled-input").checked;
-  state.settings.reminderInterval = interval;
-
-  saveState();
-  setupReminders();
-
-  showToast(
-    state.settings.remindersEnabled
-      ? "تم تفعيل التذكير أثناء استخدام التطبيق."
-      : "تم إيقاف التذكيرات."
-  );
-}
-
-function setupReminders() {
-  clearInterval(reminderTimer);
-  reminderTimer = null;
-
-  if (!state.settings.remindersEnabled) return;
-
-  reminderTimer = setInterval(() => {
-    if (document.visibilityState !== "visible") return;
-
-    showToast("تذكير لطيف: خذ استراحة قصيرة وراجع ما تريد إنجازه.");
-  }, state.settings.reminderInterval * 60 * 1000);
-}
-
-function saveBackgroundImage(file) {
-  if (!file) return;
-
-  if (!file.type.startsWith("image/")) {
-    showToast("اختر ملف صورة.");
-    return;
-  }
-
-  if (file.size > 2 * 1024 * 1024) {
-    showToast("الصورة كبيرة. اختر صورة حجمها أقل من 2 ميغابايت.");
-    $("background-image-input").value = "";
-    return;
-  }
 
   const reader = new FileReader();
 
   reader.onload = () => {
-    state.settings.backgroundImage = reader.result;
-    saveState();
-    renderAll();
-    showToast("تم تغيير صورة الخلفية.");
+    try {
+      const parsed = JSON.parse(reader.result);
+      const imported = parsed.data || parsed;
+
+      if (!imported || typeof imported !== "object") {
+        throw new Error("ملف غير صالح");
+      }
+
+      state = {
+        ...structuredClone(defaultState),
+        ...imported,
+        settings: {
+          ...defaultState.settings,
+          ...(imported.settings || {})
+        }
+      };
+
+      saveState();
+      renderAll();
+      applyAppearance();
+      showToast("تمت استعادة البيانات");
+    } catch (error) {
+      console.error(error);
+      showToast("الملف غير صالح أو لا يحتوي على نسخة احتياطية.");
+    }
   };
 
-  reader.onerror = () => showToast("تعذر قراءة الصورة.");
-  reader.readAsDataURL(file);
+  reader.readAsText(file);
 }
 
-function savePinNotice() {
-  const pin = $("app-pin-input").value.trim();
+/* عرض كل الأقسام */
 
-  if (!pin) {
-    showToast("أدخل رمزاً أولاً.");
-    return;
-  }
-
-  showModal(
-    "تنبيه بخصوص القفل",
-    "قفل التطبيق الحقيقي يحتاج إلى تنفيذ خاص داخل أندرويد. حفظ رمز هنا وحده لا يمنع فتح التطبيق ولا يحمي بياناتك. لذلك لم نحفظ الرمز كأنه قفل فعلي."
-  );
-
-  $("app-pin-input").value = "";
-}
-
-/* ربط الأحداث */
-
-function bindEvents() {
-  document.querySelectorAll("[data-page-target]").forEach((button) => {
-    button.addEventListener("click", () => {
-      navigateTo(button.dataset.pageTarget);
-    });
-  });
-
-  document.querySelectorAll("[data-go]").forEach((button) => {
-    button.addEventListener("click", () => {
-      navigateTo(button.dataset.go);
-    });
-  });
-
-  $("header-profile-btn").addEventListener("click", () => {
-    navigateTo("profile");
-  });
-
-  $("modal-close-btn").addEventListener("click", closeModal);
-  $("modal-confirm-btn").addEventListener("click", closeModal);
-
-  $("app-modal").addEventListener("click", (event) => {
-    if (event.target === $("app-modal")) closeModal();
-  });
-
-  $("save-daily-note-btn").addEventListener("click", saveDailyNote);
-
-  $("task-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-
-    const title = $("task-title-input").value.trim();
-    if (!title) return;
-
-    state.tasks.push({
-      id: makeId(),
-      title,
-      date: $("task-date-input").value || localDateKey(),
-      priority: $("task-priority-input").value,
-      color: $("task-color-input").value,
-      done: false,
-      createdAt: new Date().toISOString()
-    });
-
-    $("task-form").reset();
-    $("task-color-input").value = "#38bdf8";
-
-    saveState();
-    renderAll();
-    showToast("تمت إضافة المهمة.");
-  });
-
-  $("task-filters").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-filter]");
-    if (!button) return;
-
-    currentTaskFilter = button.dataset.filter;
-
-    document.querySelectorAll("[data-filter]").forEach((item) => {
-      item.classList.toggle("active", item === button);
-    });
-
-    renderTasks();
-  });
-
-  $("add-water-btn").addEventListener("click", () => {
-    addWater(state.waterServing);
-  });
-
-  $("custom-water-btn").addEventListener("click", () => {
-    const amount = prompt("أدخل كمية الماء بالملليلتر:");
-    if (amount !== null) addWater(amount);
-  });
-
-  $("water-serving-input").addEventListener("change", () => {
-    const value = Number($("water-serving-input").value);
-
-    if (!Number.isFinite(value) || value < 1 || value > 2000) {
-      showToast("أدخل كمية بين 1 و2000 مل.");
-      $("water-serving-input").value = state.waterServing;
-      return;
-    }
-
-    state.waterServing = Math.round(value);
-    saveState();
-  });
-
-  $("water-optional-goal-input").addEventListener("change", () => {
-    const value = Number($("water-optional-goal-input").value);
-
-    if (!Number.isFinite(value) || value < 0 || value > 10000) {
-      showToast("أدخل هدفاً صحيحاً أو اترك الحقل فارغاً.");
-      return;
-    }
-
-    state.waterGoal = Math.round(value);
-    saveState();
-    renderWater();
-  });
-
-  $("study-start-btn").addEventListener("click", startStudyTimer);
-  $("study-pause-btn").addEventListener("click", pauseStudyTimer);
-
-  $("study-reset-btn").addEventListener("click", () => {
-    if (studyTimer) {
-      clearInterval(studyTimer);
-      studyTimer = null;
-    }
-
-    resetStudyDisplay();
-    showToast("تمت إعادة ضبط المؤقت.");
-  });
-
-  $("finance-form").addEventListener("submit", saveFinanceEntry);
-  $("journal-form").addEventListener("submit", saveJournalEntry);
-  $("capsule-form").addEventListener("submit", saveCapsule);
-  $("profile-form").addEventListener("submit", saveProfile);
-  $("companion-name-form").addEventListener("submit", saveCompanionName);
-
-  $("companion-play-btn").addEventListener("click", () => {
-    interactWithCompanion("play");
-  });
-
-  $("companion-care-btn").addEventListener("click", () => {
-    interactWithCompanion("care");
-  });
-
-  $("save-appearance-btn").addEventListener("click", saveAppearance);
-
-  $("background-image-input").addEventListener("change", (event) => {
-    saveBackgroundImage(event.target.files[0]);
-  });
-
-  $("remove-background-image-btn").addEventListener("click", () => {
-    state.settings.backgroundImage = "";
-    $("background-image-input").value = "";
-    saveState();
-    renderAll();
-    showToast("تمت إزالة صورة الخلفية.");
-  });
-
-  $("export-backup-btn").addEventListener("click", exportBackup);
-
-  $("import-backup-input").addEventListener("change", (event) => {
-    importBackup(event.target.files[0]);
-  });
-
-  $("save-reminders-btn").addEventListener("click", saveReminderSettings);
-  $("save-pin-btn").addEventListener("click", savePinNotice);
-
-  $("remove-pin-btn").addEventListener("click", () => {
-    showToast("لا يوجد قفل فعلي مفعّل في هذه النسخة.");
-  });
-
-  $("profile-birth-input").addEventListener("change", () => {
-    const age = calculateAge($("profile-birth-input").value);
-    setText(
-      "profile-age-display",
-      age ? `${age.years} سنة` : "غير محدد"
-    );
-  });
+function renderAll() {
+  renderHome();
+  renderTasks();
+  renderWater();
+  renderStudy();
+  renderFinance();
+  renderJournal();
+  renderCapsules();
+  renderProfile();
+  renderSettings();
 }
 
 /* بدء التطبيق */
 
-function initializeApp() {
-  bindEvents();
+function initApp() {
+  bindNavigation();
+  bindTasks();
+  bindWater();
+  bindStudy();
+  bindFinance();
+  bindJournal();
+  bindVoiceRecorder();
+  bindCapsules();
+  bindProfile();
+  bindSettings();
+
+  resetWaterIfNewDay();
   renderAll();
-  setupReminders();
+  applyAppearance();
+  setupInAppReminders();
 
-  if ($("loading-screen")) $("loading-screen").hidden = true;
-  if ($("app-content")) $("app-content").hidden = false;
-
-  // تعيين تاريخ اليوم افتراضياً لحقل المهمة.
-  if ($("task-date-input")) {
-    $("task-date-input").value = localDateKey();
+  if (studyTimer.active && !studyTimer.paused) {
+    if (timerRemaining() <= 0) {
+      finishStudyTimer();
+    } else {
+      studyInterval = setInterval(tickStudyTimer, 250);
+    }
   }
 
-  // تحديث المؤقت المعروض عند فتح صفحة الدراسة.
-  resetStudyDisplay();
-
-  console.log("أثر يومي جاهز للعمل.");
+  const loading = $("loading-screen");
+  if (loading) {
+    setTimeout(() => loading.classList.add("hidden"), 350);
+  }
 }
 
-document.addEventListener("DOMContentLoaded", initializeApp);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}
