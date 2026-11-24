@@ -20,7 +20,7 @@
       </div>
     </header>
 
-    <!-- شاشة قفل PIN / البصمة -->
+    <!-- شاشة قفل PIN -->
     <section id="lock-screen" class="lock-overlay hidden">
       <div class="card lock-card">
         <h2>قفل منظم حياتي</h2>
@@ -100,12 +100,27 @@
               <option value="task">مهمة يومية</option>
             </select>
           </div>
-          <button id="add-task-btn" class="btn-primary" type="button">إضافة للجدول</button>
+          <div class="row-actions">
+            <button id="add-task-btn" class="btn-primary" type="button">إضافة للجدول</button>
+            <button id="enable-notify-btn" class="btn-secondary" type="button">تفعيل تنبيهات المواعيد</button>
+          </div>
+          <p id="notify-status" class="info-text"></p>
           <ul id="tasks-list" class="list-box"></ul>
         </div>
 
         <div class="card">
-          <h2>المساعد الصوتي السريع (أوفلاين + تحويل نص)</h2>
+          <h2>مؤقت جلسة الدراسة السريع</h2>
+          <p class="info-text">حدد مدة الجلسة بالدقائق وبلش فوراً بدون تشتيت.</p>
+          <div class="row-actions">
+            <input id="study-minutes-input" type="number" min="1" max="240" value="45" style="max-width:120px;margin-bottom:0;" />
+            <button id="start-study-timer-btn" class="btn-primary" type="button">ابدأ الجلسة</button>
+            <button id="stop-study-timer-btn" class="btn-secondary" type="button">إيقاف</button>
+          </div>
+          <p id="study-timer-display" class="info-text">الجلسة جاهزة (45:00)</p>
+        </div>
+
+        <div class="card">
+          <h2>المساعد الصوتي السريع (تسجيل + تحويل نص)</h2>
           <div class="row-actions">
             <button id="voice-record-btn" class="btn-primary" type="button">تسجيل صوتي</button>
             <button id="voice-stop-btn" class="btn-secondary" type="button">إيقاف التسجيل</button>
@@ -118,13 +133,16 @@
 
         <div class="card">
           <h2>وضع التركيز وحظر التطبيقات</h2>
-          <p class="info-text">أثناء التركيز، محاولة فتح تطبيق محظور تطلع رسالة عتاب خفيفة بدل التكسير والتعقيد.</p>
+          <p class="info-text">أثناء التركيز، محاولة فتح تطبيق محظور تطلع رسالة عتاب خفيفة؛ وحظر التطبيقات الخارجية الكامل على أندرويد يتفعل عبر صلاحية النظام داخل نسخة APK الأصلية.</p>
           <div class="row-actions">
             <input id="blocked-app-input" type="text" placeholder="اسم تطبيق ممنوع (مثال: تيك توك)" />
             <button id="add-blocked-app-btn" class="btn-secondary" type="button">حظر</button>
           </div>
           <ul id="blocked-apps-list" class="list-box"></ul>
-          <button id="toggle-focus-btn" class="btn-primary" type="button">تفعيل / إيقاف وضع التركيز</button>
+          <div class="row-actions">
+            <button id="toggle-focus-btn" class="btn-primary" type="button">تفعيل / إيقاف وضع التركيز</button>
+            <button id="android-perm-guide-btn" class="btn-secondary" type="button">صلاحية حظر أندرويد</button>
+          </div>
           <div id="focus-banter-box" class="banter-box hidden"></div>
         </div>
       </section>
@@ -149,7 +167,10 @@
             <input id="expense-item" type="text" placeholder="شو اشتريت اليوم؟" />
             <input id="expense-cost" type="number" placeholder="الكلفة" />
           </div>
-          <button id="add-expense-btn" class="btn-primary" type="button">تسجيل العملية</button>
+          <div class="row-actions">
+            <button id="add-expense-btn" class="btn-primary" type="button">تسجيل العملية</button>
+            <button id="clear-expenses-btn" class="btn-secondary" type="button">تصفير السجل</button>
+          </div>
           <p id="total-spent" class="info-text">إجمالي المصروف: 0</p>
           <ul id="expenses-list" class="list-box"></ul>
         </div>
@@ -226,15 +247,20 @@
               <option value="calm">هادئ ومباشر</option>
             </select>
           </div>
-          <button id="save-settings-btn" class="btn-primary" type="button">حفظ الإعدادات</button>
+          <div class="row-actions">
+            <button id="save-settings-btn" class="btn-primary" type="button">حفظ الإعدادات</button>
+            <button id="clear-bg-btn" class="btn-secondary" type="button">إزالة الخلفية</button>
+            <button id="remove-pin-btn" class="btn-secondary" type="button">إلغاء رمز PIN</button>
+          </div>
         </div>
 
         <div class="card">
           <h2>النسخ الاحتياطي ونقل البيانات لموبايل جديد</h2>
           <div class="row-actions">
             <button id="export-backup-btn" class="btn-primary" type="button">تصدير نسخة احتياطية</button>
+            <button id="import-text-backup-btn" class="btn-secondary" type="button">استيراد من النص</button>
             <label class="btn-secondary file-label">
-              استيراد نسخة
+              استيراد ملف JSON
               <input id="import-backup-input" type="file" accept=".json" hidden />
             </label>
           </div>
