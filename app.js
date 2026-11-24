@@ -7,7 +7,8 @@ const defaultState = {
     weight: 70,
     height: 170,
     gender: "male",
-    role: "student"
+    role: "student",
+    completed: false
   },
   waterMl: 0,
   mood: "normal",
@@ -49,11 +50,18 @@ function loadState() {
     const base = cloneDefaultState();
     if (!raw) return base;
     const parsed = JSON.parse(raw);
+    const mergedSettings = { ...base.settings, ...(parsed.settings || {}) };
+    const mergedProfile = { ...base.profile, ...(parsed.profile || {}) };
+    if (!mergedProfile.completed && (mergedProfile.name || mergedProfile.dob)) {
+      mergedProfile.completed = true;
+    }
+    const shouldLockOnStart = Boolean(mergedSettings.pin);
     return {
       ...base,
       ...parsed,
-      profile: { ...base.profile, ...(parsed.profile || {}) },
-      settings: { ...base.settings, ...(parsed.settings || {}) }
+      profile: mergedProfile,
+      settings: mergedSettings,
+      unlocked: shouldLockOnStart ? false : true
     };
   } catch {
     return cloneDefaultState();
@@ -64,7 +72,7 @@ function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
-    alert("مساحة التخزين المحلية ممتلئة (مثلاً بسبب صورة خلفية كبيرة)؛ جرّب صورة أصغر.");
+    alert("مساحة التخزين المحلية ممتلئة؛ يرجى اختيار صورة خلفية أصغر حجماً.");
   }
 }
 
@@ -101,18 +109,38 @@ function calcWaterGoalMl() {
   return Math.round(ml);
 }
 
-function applyAppearance() {
-  const appEl = document.getElementById("app");
-  appEl.className = `${state.settings.theme === "light" ? "theme-light" : "theme-dark"} ${state.settings.cardStyle}`;
-  document.documentElement.style.setProperty("--accent", state.settings.accent || "#38bdf8");
-  appEl.style.backgroundImage = state.settings.bgImage ? `url(${state.settings.bgImage})` : "none";
-
+function enforceSecurityGuards() {
   const lockScreen = document.getElementById("lock-screen");
+  const onboardingScreen = document.getElementById("onboarding-screen");
+
   if (state.settings.pin && !state.unlocked) {
     lockScreen.classList.remove("hidden");
-  } else {
-    lockScreen.classList.add("hidden");
+    onboardingScreen.classList.add("hidden");
+    return;
   }
+
+  lockScreen.classList.add("hidden");
+
+  if (!state.profile.completed) {
+    onboardingScreen.classList.remove("hidden");
+  } else {
+    onboardingScreen.classList.add("hidden");
+  }
+}
+
+function applyAppearance() {
+  const appEl = document.getElementById("app");
+  const validStyles = ["card-style-1", "card-style-2", "card-style-3", "card-style-4", "card-style-5"];
+  const chosenStyle = validStyles.includes(state.settings.cardStyle) ? state.settings.cardStyle : "card-style-1";
+  const themeClass = state.settings.theme === "light" ? "theme-light" : "theme-dark";
+
+  appEl.className = `${themeClass} ${chosenStyle}`;
+  const accentVal = state.settings.accent || "#38bdf8";
+  document.documentElement.style.setProperty("--accent", accentVal);
+  appEl.style.setProperty("--accent", accentVal);
+  appEl.style.backgroundImage = state.settings.bgImage ? `url(${state.settings.bgImage})` : "none";
+
+  enforceSecurityGuards();
 }
 
 function escapeHtml(str) {
@@ -131,17 +159,29 @@ function playBeepAlert() {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
-    osc.frequency.value = 740;
-    gain.gain.value = 0.08;
+    osc.frequency.value = 780;
+    gain.gain.value = 0.1;
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
     setTimeout(() => {
       osc.stop();
       ctx.close();
-    }, 350);
+    }, 400);
   } catch {
-    // تجاهل إذا المتصفح منع الصوت تلقائياً
+    // تجاهل في حال تعذر تشغيل الصوت تلقائياً
+  }
+}
+
+function triggerTaskAlert(titleText) {
+  playBeepAlert();
+  alert(`تنبيه الموعد: ${titleText}`);
+  if ("Notification" in window && Notification.permission === "granted") {
+    try {
+      new Notification("منظم حياتي", { body: `حان موعد: ${titleText}` });
+    } catch {
+      // تجاهل في حال عدم دعم إشعارات النظام المباشرة
+    }
   }
 }
 
@@ -151,23 +191,42 @@ function formatClock(sec) {
   return `${m}:${s}`;
 }
 
+function roleLabel(role) {
+  if (role === "employee") return "موظف";
+  if (role === "household") return "رب بيت";
+  return "طالب";
+}
+
+function genderLabel(gender) {
+  return gender === "female" ? "أنثى" : "ذكر";
+}
+
 function renderAll() {
   applyAppearance();
 
-  // العمر الديناميكي
+  // العمر الديناميكي والبطاقة الشخصية
   const ageObj = calcExactAge(state.profile.dob);
   const liveAgeEl = document.getElementById("live-age");
   const exactAgeEl = document.getElementById("exact-age-display");
+  const summaryEl = document.getElementById("profile-summary-text");
+
   if (ageObj) {
     const ageText = `${ageObj.years} سنة، ${ageObj.months} شهر، ${ageObj.days} يوم`;
     liveAgeEl.textContent = `${state.profile.name ? state.profile.name + " • " : ""}${ageText}`;
-    exactAgeEl.textContent = `عمرك المحدّث اليوم تلقائياً: ${ageText}`;
+    exactAgeEl.textContent = `العمر المحدث اليوم تلقائياً: ${ageText}`;
   } else {
-    liveAgeEl.textContent = "حدد تاريخ ميلادك لتحديث العمر يومياً";
+    liveAgeEl.textContent = "يرجى تحديد تاريخ الميلاد لحساب العمر تلقائياً.";
     exactAgeEl.textContent = "";
   }
 
-  // تعبئة حقول الملف والإعدادات
+  if (state.profile.completed) {
+    summaryEl.textContent =
+      `الاسم: ${state.profile.name || "غير محدد"} • الجنس: ${genderLabel(state.profile.gender)} • الصفة: ${roleLabel(state.profile.role)} • الوزن: ${state.profile.weight} كغ • الطول: ${state.profile.height} سم`;
+  } else {
+    summaryEl.textContent = "لم يتم حفظ بيانات الملف الشخصي بعد.";
+  }
+
+  // تعبئة حقول التعديل والإعدادات
   document.getElementById("user-name").value = state.profile.name;
   document.getElementById("user-dob").value = state.profile.dob;
   document.getElementById("user-weight").value = state.profile.weight;
@@ -185,18 +244,18 @@ function renderAll() {
   const cupsDrunk = (state.waterMl / 250).toFixed(1).replace(/\.0$/, "");
   const pct = Math.min(100, Math.round((state.waterMl / goalMl) * 100));
   document.getElementById("water-goal-text").textContent =
-    `المطلوب اليوم: ${(goalMl / 1000).toFixed(2)} لتر (${goalMl} مل ≈ ${cupsTarget} كاسات) • شربت: ${cupsDrunk} كاسة`;
+    `الهدف اليومي: ${(goalMl / 1000).toFixed(2)} لتر (${goalMl} مل ≈ ${cupsTarget} أكواب) • المتناول: ${cupsDrunk} كوب`;
   document.getElementById("water-fill").style.width = `${pct}%`;
   document.getElementById("water-percent").textContent = `${pct}%`;
 
   // المزاج والإنجازات
   const moodBox = document.getElementById("mood-advice");
   if (state.mood === "stressed") {
-    moodBox.textContent = "واضح إنك متضايق أو تعبان اليوم؛ خففنا الضغط، خذ نفس عميق وركّز على أهم شغلة وحدة بس.";
+    moodBox.textContent = "يبدو أنك تشعر بالتوتر أو الإرهاق اليوم؛ خفف الضغط، خذ نفساً عميقاً، وركز على مهمة واحدة أساسية.";
   } else if (state.mood === "travel") {
-    moodBox.textContent = "وضع الرحلة مفعّل: جداول خفيفة مناسبة للطريق وزدنا تذكير الماء شوي.";
+    moodBox.textContent = "وضع السفر والتنقل مفعل: تم اعتماد جداول مرنة وزيادة التذكير بشرب الماء.";
   } else {
-    moodBox.textContent = "الوضع طبيعي ومرتب؛ خطوة ورا خطوة بتوصل لهدفك.";
+    moodBox.textContent = "الحالة طبيعية ومنظمة؛ التقدم خطوة بخطوة يحقق الهدف بثبات.";
   }
 
   const achList = document.getElementById("daily-achievements");
@@ -205,7 +264,7 @@ function renderAll() {
   [
     `الماء اليوم: ${pct}% من الهدف`,
     `المهام المنجزة: ${doneTasks} من ${state.tasks.length}`,
-    `المصاريف المسجلة: ${state.expenses.length} عملية`
+    `المصروفات المسجلة: ${state.expenses.length} عملية`
   ].forEach((item) => {
     const li = document.createElement("li");
     li.textContent = item;
@@ -218,9 +277,9 @@ function renderAll() {
   state.tasks.forEach((t, idx) => {
     const li = document.createElement("li");
     li.innerHTML = `
-      <span>${t.done ? "✅ " : "⏳ "}<strong>${escapeHtml(t.title)}</strong> ${t.time ? `(${t.time})` : ""}</span>
+      <span>${t.done ? "مكتملة: " : "قيد التنفيذ: "}<strong>${escapeHtml(t.title)}</strong> ${t.time ? `(${t.time})` : ""}</span>
       <div class="row-actions" style="margin-bottom:0;">
-        <button class="btn-secondary" data-toggle-task="${idx}" type="button">${t.done ? "إلغاء" : "تم"}</button>
+        <button class="btn-secondary" data-toggle-task="${idx}" type="button">${t.done ? "إلغاء الإنجاز" : "إتمام"}</button>
         <button class="btn-secondary" data-del-task="${idx}" type="button">حذف</button>
       </div>
     `;
@@ -237,7 +296,7 @@ function renderAll() {
     const div = document.createElement("div");
     div.className = "clip-item";
     div.innerHTML = `
-      <span>تسجيل #${idx + 1} (${clip.date})</span>
+      <span>تسجيل رقم ${idx + 1} (${clip.date})</span>
       <audio controls src="${clip.dataUrl}" style="max-width:170px;height:32px;"></audio>
     `;
     clipsBox.appendChild(div);
@@ -255,7 +314,7 @@ function renderAll() {
     blockedList.appendChild(li);
   });
   document.getElementById("toggle-focus-btn").textContent =
-    state.focusActive ? "إيقاف وضع التركيز (مفعّل الآن)" : "تفعيل وضع التركيز";
+    state.focusActive ? "إيقاف وضع التركيز (مفعل حالياً)" : "تفعيل وضع التركيز";
 
   // المصاريف
   const expList = document.getElementById("expenses-list");
@@ -275,7 +334,7 @@ function renderAll() {
   state.pets.forEach((pet, idx) => {
     const li = document.createElement("li");
     li.innerHTML = `
-      <span>رفيق: ${escapeHtml(pet)}</span>
+      <span>الرفيق: ${escapeHtml(pet)}</span>
       <button class="btn-secondary" data-del-pet="${idx}" type="button">حذف</button>
     `;
     petsList.appendChild(li);
@@ -288,7 +347,7 @@ function renderAll() {
   state.capsules.forEach((c) => {
     const unlocked = !c.date || c.date <= todayStr;
     const li = document.createElement("li");
-    li.innerHTML = `<span>${unlocked ? escapeHtml(c.text) : `مقفلة حتى ${c.date}`}</span>`;
+    li.innerHTML = `<span>${unlocked ? escapeHtml(c.text) : `مقفلة حتى تاريخ ${c.date}`}</span>`;
     capList.appendChild(li);
   });
 }
@@ -297,22 +356,24 @@ function showFocusBanter(appName) {
   const box = document.getElementById("focus-banter-box");
   if (!state.focusActive) {
     box.classList.remove("hidden");
-    box.textContent = `وضع التركيز مطفى حالياً؛ فيك تفتح ${appName} أو تفعّل التركيز أولاً.`;
+    box.textContent = `وضع التركيز غير مفعل حالياً؛ يمكنك فتح "${appName}" أو تفعيل وضع التركيز أولاً.`;
     return;
   }
   const tone = state.settings.banterTone;
-  let msg = `مو إنت يلي حطيت الموعد بإيدك وقلت بدي أركز؟ شو مبسوط هلق بـ "${appName}"؟ ارجع لشغلك بلا دلع!`;
+  let msg = `أنت من حدد وقت التركيز بإرادتك؛ ما الذي يدفعك لفتح "${appName}" الآن؟ عد إلى عملك بإصرار.`;
   if (tone === "hype") {
-    msg = `أبطالك عم يشتغلوا هلق! "${appName}" ما رح يطير، خلّي تركيزك نار وكمل!`;
+    msg = `أنت قادر على إتمام هدفك الآن! "${appName}" لن يفوتك، استمر بتركيز كامل حتى النهاية.`;
   } else if (tone === "calm") {
-    msg = `هذا التطبيق محظور خلال جلسة التركيز الحالية (${appName}). أكمل جلستك ثم خذ استراحة.`;
+    msg = `هذا التطبيق مقيد خلال جلسة التركيز الحالية (${appName}). أكمل جلستك ثم خذ قسطاً من الراحة.`;
   }
   box.classList.remove("hidden");
   box.textContent = msg;
 }
 
-// مراقبة مواعيد المهام كل 30 ثانية
+// مراقبة مواعيد المهام كل 20 ثانية وحماية القفل
 setInterval(() => {
+  enforceSecurityGuards();
+
   const now = new Date();
   const hh = String(now.getHours()).padStart(2, "0");
   const mm = String(now.getMinutes()).padStart(2, "0");
@@ -324,18 +385,38 @@ setInterval(() => {
       const uniqueKey = `${dayKey}-${idx}-${t.time}`;
       if (!notifiedTasksToday.has(uniqueKey)) {
         notifiedTasksToday.add(uniqueKey);
-        playBeepAlert();
-        if ("Notification" in window && Notification.permission === "granted") {
-          new Notification("منظم حياتي", { body: `حان موعد: ${t.title}` });
-        }
+        triggerTaskAlert(t.title);
       }
     }
   });
-}, 30000);
+}, 20000);
 
-// الأحداث
+// حفظ الإعداد الأولي لمرة واحدة
+document.getElementById("ob-save-btn").addEventListener("click", () => {
+  state.profile = {
+    name: document.getElementById("ob-name").value.trim(),
+    dob: document.getElementById("ob-dob").value,
+    weight: Number(document.getElementById("ob-weight").value) || 70,
+    height: Number(document.getElementById("ob-height").value) || 170,
+    gender: document.getElementById("ob-gender").value,
+    role: document.getElementById("ob-role").value,
+    completed: true
+  };
+  saveState();
+  renderAll();
+});
+
+document.getElementById("open-profile-edit-btn").addEventListener("click", () => {
+  document.getElementById("profile-edit-panel").classList.toggle("hidden");
+});
+
+// التنقل بين الأقسام
 document.querySelectorAll(".nav-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
+    if (state.settings.pin && !state.unlocked) {
+      enforceSecurityGuards();
+      return;
+    }
     document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
     document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
     btn.classList.add("active");
@@ -351,7 +432,7 @@ document.getElementById("theme-toggle-btn").addEventListener("click", () => {
 
 document.getElementById("lock-btn").addEventListener("click", () => {
   if (!state.settings.pin) {
-    alert("عيّن رمز PIN أولاً من تبويب الإعدادات.");
+    alert("يرجى تعيين رمز PIN أولاً من تبويب الإعدادات.");
     return;
   }
   state.unlocked = false;
@@ -364,11 +445,11 @@ document.getElementById("unlock-btn").addEventListener("click", () => {
   if (val === state.settings.pin) {
     state.unlocked = true;
     document.getElementById("pin-input").value = "";
-    document.getElementById("lock-msg").textContent = "أدخل الرمز السري للمتابعة";
+    document.getElementById("lock-msg").textContent = "أدخل الرمز السري للمتابعة إلى التطبيق";
     saveState();
     renderAll();
   } else {
-    document.getElementById("lock-msg").textContent = "الرمز غلط، جرّب مرة تانية!";
+    document.getElementById("lock-msg").textContent = "رمز المرور غير صحيح، يرجى المحاولة مرة أخرى.";
   }
 });
 
@@ -379,8 +460,10 @@ document.getElementById("save-profile-btn").addEventListener("click", () => {
     weight: Number(document.getElementById("user-weight").value) || 70,
     height: Number(document.getElementById("user-height").value) || 170,
     gender: document.getElementById("user-gender").value,
-    role: document.getElementById("user-role").value
+    role: document.getElementById("user-role").value,
+    completed: true
   };
+  document.getElementById("profile-edit-panel").classList.add("hidden");
   saveState();
   renderAll();
 });
@@ -422,13 +505,17 @@ document.getElementById("add-task-btn").addEventListener("click", () => {
 document.getElementById("enable-notify-btn").addEventListener("click", async () => {
   const statusEl = document.getElementById("notify-status");
   if (!("Notification" in window)) {
-    statusEl.textContent = "تنبيهات المتصفح غير متاحة هون؛ جرس التنبيه الداخلي شغال أثناء فتح التطبيق.";
+    statusEl.textContent = "إشعارات النظام غير متاحة في هذه البيئة؛ التنبيه الصوتي والمرئي الداخلي يعملان عند حلول الموعد.";
     return;
   }
   const perm = await Notification.requestPermission();
   statusEl.textContent = perm === "granted"
     ? "تم تفعيل التنبيهات بنجاح."
-    : "لم يتم منح إذن التنبيه؛ جرس التنبيه الداخلي سيبقى يعمل.";
+    : "لم يتم منح إذن الإشعارات؛ سيبقى التنبيه الداخلي والصوتي فعالاً.";
+});
+
+document.getElementById("test-alert-btn").addEventListener("click", () => {
+  triggerTaskAlert("اختبار تنبيه المواعيد من منظم حياتي");
 });
 
 document.getElementById("tasks-list").addEventListener("click", (e) => {
@@ -457,8 +544,7 @@ document.getElementById("start-study-timer-btn").addEventListener("click", () =>
     if (studyRemainingSec <= 0) {
       studyRemainingSec = 0;
       clearInterval(studyTimerInterval);
-      playBeepAlert();
-      alert("انتهت جلسة الدراسة! خذ استراحة قصيرة.");
+      triggerTaskAlert("انتهت جلسة الدراسة، يمكنك أخذ استراحة قصيرة.");
     }
     renderAll();
   }, 1000);
@@ -474,7 +560,7 @@ document.getElementById("stop-study-timer-btn").addEventListener("click", () => 
 // التسجيل الصوتي وتحويل النص
 document.getElementById("voice-record-btn").addEventListener("click", async () => {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("تسجيل الصوت غير متاح بهالبيئة، استخدم تحويل الحكي لنص أو أضف المهمة كتابياً.");
+    alert("تسجيل الصوت غير متاح في هذه البيئة؛ يمكنك استخدام تحويل الكلام إلى نص أو إضافة المهمة كتابياً.");
     return;
   }
   try {
@@ -495,7 +581,7 @@ document.getElementById("voice-record-btn").addEventListener("click", async () =
     };
     mediaRecorder.start();
   } catch {
-    alert("تعذر الوصول للميكروفون؛ تأكد من إعطاء الإذن.");
+    alert("تعذر الوصول إلى الميكروفون؛ يرجى التحقق من منح الإذن.");
   }
 });
 
@@ -508,7 +594,7 @@ document.getElementById("voice-stop-btn").addEventListener("click", () => {
 document.getElementById("voice-transcribe-btn").addEventListener("click", () => {
   const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRec) {
-    alert("ميزة تحويل الصوت لنص غير مدعومة هون؛ اكتب النص مباشرة بالخانة.");
+    alert("ميزة تحويل الكلام إلى نص غير مدعومة هنا؛ يمكنك كتابة النص مباشرة في الخانة.");
     return;
   }
   const rec = new SpeechRec();
@@ -560,7 +646,7 @@ document.getElementById("android-perm-guide-btn").addEventListener("click", () =
   const box = document.getElementById("focus-banter-box");
   box.classList.remove("hidden");
   box.textContent =
-    "لحظر تطبيقات أندرويد الخارجية بالكامل داخل نسخة APK، يُفعّل التطبيق صلاحية (الوصول لبيانات الاستخدام / إمكانية الوصول) بعد موافقتك في إعدادات الهاتف.";
+    "لحظر التطبيقات المثبتة على أندرويد ومنع فتحها فعلياً وقراءة قائمة التطبيقات، يلزم إضافة طبقة أصلية (Java/Kotlin) داخل مشروع Android وتفعيل صلاحية الوصول إلى بيانات الاستخدام أو إمكانية الوصول في إعدادات الهاتف.";
 });
 
 // المالية
@@ -609,9 +695,9 @@ document.getElementById("pets-list").addEventListener("click", (e) => {
 document.getElementById("pet-remind-btn").addEventListener("click", () => {
   const activePet = state.pets[0] || "رفيقك";
   const reminders = [
-    `${activePet} بيقلك: قوم اشرب كاسة مي وحرك جسمك شوي!`,
-    `${activePet} بيذكرك: شوف شو ضل عليك مهام اليوم وخلصها بكير.`,
-    `${activePet} بيقلك: يعطيك العافية، لا تنسى راحة عينيك.`
+    `يذكرك ${activePet} بشرب كوب من الماء وتحريك الجسم قليلاً.`,
+    `يذكرك ${activePet} بمراجعة المهام المتبقية لليوم وإنجازها في وقتها.`,
+    `يذكرك ${activePet} بإراحة العينين وأخذ قسط قصير من الهدوء.`
   ];
   document.getElementById("pet-message").textContent =
     reminders[Math.floor(Math.random() * reminders.length)];
@@ -694,7 +780,7 @@ document.getElementById("save-settings-btn").addEventListener("click", () => {
   const newPin = document.getElementById("new-pin-input").value.trim();
   if (newPin) {
     state.settings.pin = newPin;
-    state.unlocked = true;
+    state.unlocked = false;
     document.getElementById("new-pin-input").value = "";
   }
   saveState();
