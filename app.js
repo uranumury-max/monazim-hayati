@@ -29,31 +29,43 @@ const defaultState = {
   unlocked: true
 };
 
+function cloneDefaultState() {
+  return JSON.parse(JSON.stringify(defaultState));
+}
+
 let state = loadState();
 let mediaRecorder = null;
 let audioChunks = [];
 let gameTimer = null;
 let gameScore = 0;
 let gameTimeLeft = 10;
+let studyTimerInterval = null;
+let studyRemainingSec = 45 * 60;
+const notifiedTasksToday = new Set();
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return structuredClone(defaultState);
+    const base = cloneDefaultState();
+    if (!raw) return base;
     const parsed = JSON.parse(raw);
     return {
-      ...structuredClone(defaultState),
+      ...base,
       ...parsed,
-      profile: { ...defaultState.profile, ...(parsed.profile || {}) },
-      settings: { ...defaultState.settings, ...(parsed.settings || {}) }
+      profile: { ...base.profile, ...(parsed.profile || {}) },
+      settings: { ...base.settings, ...(parsed.settings || {}) }
     };
   } catch {
-    return structuredClone(defaultState);
+    return cloneDefaultState();
   }
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    alert("مساحة التخزين المحلية ممتلئة (مثلاً بسبب صورة خلفية كبيرة)؛ جرّب صورة أصغر.");
+  }
 }
 
 function calcExactAge(dobStr) {
@@ -101,6 +113,42 @@ function applyAppearance() {
   } else {
     lockScreen.classList.add("hidden");
   }
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function playBeepAlert() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 740;
+    gain.gain.value = 0.08;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    setTimeout(() => {
+      osc.stop();
+      ctx.close();
+    }, 350);
+  } catch {
+    // تجاهل إذا المتصفح منع الصوت تلقائياً
+  }
+}
+
+function formatClock(sec) {
+  const m = String(Math.floor(sec / 60)).padStart(2, "0");
+  const s = String(sec % 60).padStart(2, "0");
+  return `${m}:${s}`;
 }
 
 function renderAll() {
@@ -171,10 +219,16 @@ function renderAll() {
     const li = document.createElement("li");
     li.innerHTML = `
       <span>${t.done ? "✅ " : "⏳ "}<strong>${escapeHtml(t.title)}</strong> ${t.time ? `(${t.time})` : ""}</span>
-      <button class="btn-secondary" data-toggle-task="${idx}" type="button">${t.done ? "إلغاء" : "تم"}</button>
+      <div class="row-actions" style="margin-bottom:0;">
+        <button class="btn-secondary" data-toggle-task="${idx}" type="button">${t.done ? "إلغاء" : "تم"}</button>
+        <button class="btn-secondary" data-del-task="${idx}" type="button">حذف</button>
+      </div>
     `;
     tasksList.appendChild(li);
   });
+
+  // مؤقت الجلسة
+  document.getElementById("study-timer-display").textContent = `الوقت المتبقي: ${formatClock(studyRemainingSec)}`;
 
   // التسجيلات الصوتية
   const clipsBox = document.getElementById("voice-clips-list");
@@ -239,14 +293,6 @@ function renderAll() {
   });
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 function showFocusBanter(appName) {
   const box = document.getElementById("focus-banter-box");
   if (!state.focusActive) {
@@ -264,6 +310,28 @@ function showFocusBanter(appName) {
   box.classList.remove("hidden");
   box.textContent = msg;
 }
+
+// مراقبة مواعيد المهام كل 30 ثانية
+setInterval(() => {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  const currentHM = `${hh}:${mm}`;
+  const dayKey = now.toISOString().slice(0, 10);
+
+  state.tasks.forEach((t, idx) => {
+    if (!t.done && t.time === currentHM) {
+      const uniqueKey = `${dayKey}-${idx}-${t.time}`;
+      if (!notifiedTasksToday.has(uniqueKey)) {
+        notifiedTasksToday.add(uniqueKey);
+        playBeepAlert();
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("منظم حياتي", { body: `حان موعد: ${t.title}` });
+        }
+      }
+    }
+  });
+}, 30000);
 
 // الأحداث
 document.querySelectorAll(".nav-btn").forEach((btn) => {
@@ -296,6 +364,7 @@ document.getElementById("unlock-btn").addEventListener("click", () => {
   if (val === state.settings.pin) {
     state.unlocked = true;
     document.getElementById("pin-input").value = "";
+    document.getElementById("lock-msg").textContent = "أدخل الرمز السري للمتابعة";
     saveState();
     renderAll();
   } else {
@@ -350,37 +419,84 @@ document.getElementById("add-task-btn").addEventListener("click", () => {
   renderAll();
 });
 
+document.getElementById("enable-notify-btn").addEventListener("click", async () => {
+  const statusEl = document.getElementById("notify-status");
+  if (!("Notification" in window)) {
+    statusEl.textContent = "تنبيهات المتصفح غير متاحة هون؛ جرس التنبيه الداخلي شغال أثناء فتح التطبيق.";
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  statusEl.textContent = perm === "granted"
+    ? "تم تفعيل التنبيهات بنجاح."
+    : "لم يتم منح إذن التنبيه؛ جرس التنبيه الداخلي سيبقى يعمل.";
+});
+
 document.getElementById("tasks-list").addEventListener("click", (e) => {
-  const idx = e.target.dataset.toggleTask;
-  if (idx !== undefined) {
+  if (e.target.dataset.toggleTask !== undefined) {
+    const idx = Number(e.target.dataset.toggleTask);
     state.tasks[idx].done = !state.tasks[idx].done;
+    saveState();
+    renderAll();
+  } else if (e.target.dataset.delTask !== undefined) {
+    const idx = Number(e.target.dataset.delTask);
+    state.tasks.splice(idx, 1);
     saveState();
     renderAll();
   }
 });
 
+// مؤقت الدراسة
+document.getElementById("start-study-timer-btn").addEventListener("click", () => {
+  clearInterval(studyTimerInterval);
+  const mins = Math.max(1, Number(document.getElementById("study-minutes-input").value) || 45);
+  studyRemainingSec = mins * 60;
+  renderAll();
+
+  studyTimerInterval = setInterval(() => {
+    studyRemainingSec -= 1;
+    if (studyRemainingSec <= 0) {
+      studyRemainingSec = 0;
+      clearInterval(studyTimerInterval);
+      playBeepAlert();
+      alert("انتهت جلسة الدراسة! خذ استراحة قصيرة.");
+    }
+    renderAll();
+  }, 1000);
+});
+
+document.getElementById("stop-study-timer-btn").addEventListener("click", () => {
+  clearInterval(studyTimerInterval);
+  const mins = Math.max(1, Number(document.getElementById("study-minutes-input").value) || 45);
+  studyRemainingSec = mins * 60;
+  renderAll();
+});
+
 // التسجيل الصوتي وتحويل النص
 document.getElementById("voice-record-btn").addEventListener("click", async () => {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("المتصفح ما بيدعم تسجيل الصوت هون، استخدم تحويل الحكي لنص أو أضف المهمة كتابياً.");
+    alert("تسجيل الصوت غير متاح بهالبيئة، استخدم تحويل الحكي لنص أو أضف المهمة كتابياً.");
     return;
   }
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  audioChunks = [];
-  mediaRecorder = new MediaRecorder(stream);
-  mediaRecorder.ondataavailable = (ev) => audioChunks.push(ev.data);
-  mediaRecorder.onstop = () => {
-    const blob = new Blob(audioChunks, { type: "audio/webm" });
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      state.voiceClips.push({ dataUrl: reader.result, date: new Date().toLocaleTimeString("ar") });
-      saveState();
-      renderAll();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (ev) => audioChunks.push(ev.data);
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(audioChunks, { type: "audio/webm" });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        state.voiceClips.push({ dataUrl: reader.result, date: new Date().toLocaleTimeString("ar") });
+        saveState();
+        renderAll();
+      };
+      reader.readAsDataURL(blob);
+      stream.getTracks().forEach((tr) => tr.stop());
     };
-    reader.readAsDataURL(blob);
-    stream.getTracks().forEach((tr) => tr.stop());
-  };
-  mediaRecorder.start();
+    mediaRecorder.start();
+  } catch {
+    alert("تعذر الوصول للميكروفون؛ تأكد من إعطاء الإذن.");
+  }
 });
 
 document.getElementById("voice-stop-btn").addEventListener("click", () => {
@@ -392,7 +508,7 @@ document.getElementById("voice-stop-btn").addEventListener("click", () => {
 document.getElementById("voice-transcribe-btn").addEventListener("click", () => {
   const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRec) {
-    alert("ميزة تحويل الصوت لنص غير مدعومة بهالمتصفح؛ اكتب النص مباشرة بالخانة.");
+    alert("ميزة تحويل الصوت لنص غير مدعومة هون؛ اكتب النص مباشرة بالخانة.");
     return;
   }
   const rec = new SpeechRec();
@@ -440,6 +556,13 @@ document.getElementById("toggle-focus-btn").addEventListener("click", () => {
   renderAll();
 });
 
+document.getElementById("android-perm-guide-btn").addEventListener("click", () => {
+  const box = document.getElementById("focus-banter-box");
+  box.classList.remove("hidden");
+  box.textContent =
+    "لحظر تطبيقات أندرويد الخارجية بالكامل داخل نسخة APK، يُفعّل التطبيق صلاحية (الوصول لبيانات الاستخدام / إمكانية الوصول) بعد موافقتك في إعدادات الهاتف.";
+});
+
 // المالية
 document.getElementById("calc-split-btn").addEventListener("click", () => {
   const amt = Number(document.getElementById("income-amount").value) || 0;
@@ -457,6 +580,12 @@ document.getElementById("add-expense-btn").addEventListener("click", () => {
   state.expenses.push({ item, cost });
   document.getElementById("expense-item").value = "";
   document.getElementById("expense-cost").value = "";
+  saveState();
+  renderAll();
+});
+
+document.getElementById("clear-expenses-btn").addEventListener("click", () => {
+  state.expenses = [];
   saveState();
   renderAll();
 });
@@ -545,6 +674,19 @@ document.getElementById("bg-image-input").addEventListener("change", (e) => {
   reader.readAsDataURL(file);
 });
 
+document.getElementById("clear-bg-btn").addEventListener("click", () => {
+  state.settings.bgImage = "";
+  saveState();
+  renderAll();
+});
+
+document.getElementById("remove-pin-btn").addEventListener("click", () => {
+  state.settings.pin = "";
+  state.unlocked = true;
+  saveState();
+  renderAll();
+});
+
 document.getElementById("save-settings-btn").addEventListener("click", () => {
   state.settings.cardStyle = document.getElementById("card-style-select").value;
   state.settings.accent = document.getElementById("accent-color-picker").value;
@@ -559,8 +701,32 @@ document.getElementById("save-settings-btn").addEventListener("click", () => {
   renderAll();
 });
 
+function applyImportedBackup(rawText) {
+  const imported = JSON.parse(rawText);
+  const base = cloneDefaultState();
+  state = {
+    ...base,
+    ...imported,
+    profile: { ...base.profile, ...(imported.profile || {}) },
+    settings: { ...base.settings, ...(imported.settings || {}) },
+    unlocked: true
+  };
+  saveState();
+  renderAll();
+}
+
 document.getElementById("export-backup-btn").addEventListener("click", () => {
   document.getElementById("backup-json-box").value = JSON.stringify(state);
+});
+
+document.getElementById("import-text-backup-btn").addEventListener("click", () => {
+  const raw = document.getElementById("backup-json-box").value.trim();
+  if (!raw) return;
+  try {
+    applyImportedBackup(raw);
+  } catch {
+    alert("النص المدخل ليس نسخة احتياطية صالحة.");
+  }
 });
 
 document.getElementById("import-backup-input").addEventListener("change", (e) => {
@@ -569,10 +735,7 @@ document.getElementById("import-backup-input").addEventListener("change", (e) =>
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      const imported = JSON.parse(reader.result);
-      state = { ...structuredClone(defaultState), ...imported };
-      saveState();
-      renderAll();
+      applyImportedBackup(reader.result);
     } catch {
       alert("ملف النسخة الاحتياطية غير صالح.");
     }
