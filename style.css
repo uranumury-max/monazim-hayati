@@ -69,6 +69,7 @@ body {
   margin-top: 4px;
   font-size: 0.78rem;
   color: var(--accent);
+  font-weight: 600;
 }
 
 .top-actions {
@@ -101,7 +102,7 @@ body {
   white-space: nowrap;
   cursor: pointer;
   font-size: 0.85rem;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 .nav-btn.active {
@@ -128,51 +129,55 @@ body {
   display: block;
 }
 
-.card {
-  background: var(--bg-card);
+#app .card {
+  background-color: var(--bg-card);
   color: var(--text-main);
   border: 1px solid var(--border-col);
   border-radius: var(--radius);
   padding: 16px;
   margin-bottom: 14px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-radius 0.2s ease, background 0.2s ease;
 }
 
-.card h2 {
+#app .card h2 {
   font-size: 1.05rem;
   margin-bottom: 12px;
   color: var(--accent);
 }
 
-/* 5 أشكال للكروت */
+/* 5 أشكال واضحة ومتميزة للكروت */
 #app.card-style-1 .card {
-  border-radius: 10px;
-  border-width: 1px;
+  border-radius: 6px;
+  border: 1px solid var(--border-col);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
 }
 
 #app.card-style-2 .card {
-  border-radius: 26px;
+  border-radius: 28px;
+  border: 1px solid var(--border-col);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
 }
 
 #app.card-style-3 .card {
-  border-radius: 14px;
-  border: 2px solid var(--accent);
+  border-radius: 12px;
+  border: 2.5px solid var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 #app.card-style-4 .card {
   border-radius: 16px;
-  background-image: linear-gradient(135deg, rgba(56, 189, 248, 0.14), transparent);
+  border: 1px solid var(--accent);
+  background-image: linear-gradient(135deg, color-mix(in srgb, var(--accent) 26%, transparent), var(--bg-card) 75%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 #app.card-style-5 .card {
   border-radius: 20px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  background: rgba(30, 41, 59, 0.72);
-}
-
-#app.theme-light.card-style-5 .card {
-  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background-color: color-mix(in srgb, var(--bg-card) 65%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border-col));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
 /* الحقول والأزرار */
@@ -312,8 +317,8 @@ textarea:focus {
   top: 0;
   bottom: 0;
   width: 0%;
-  background: linear-gradient(90deg, #0284c7, #38bdf8);
-  transition: width 0.35s ease;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 65%, #0284c7), var(--accent));
+  transition: width 0.35s ease, background 0.25s ease;
 }
 
 #water-percent {
@@ -336,17 +341,18 @@ textarea:focus {
 .lock-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(2, 6, 23, 0.92);
-  z-index: 999;
+  background: rgba(2, 6, 23, 0.95);
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
 }
 
-.lock-card {
+.lock-card,
+.onboarding-card {
   width: 100%;
-  max-width: 360px;
+  max-width: 420px;
   text-align: center;
 }
 
